@@ -1,0 +1,2411 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>AeroSense — Live GPS Air Quality & Health PWA</title>
+
+  <!-- iOS & Android PWA Meta Tags -->
+  <meta name="application-name" content="AeroSense" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="AeroSense" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0B1120" />
+  <meta name="description" content="Real-time GPS local air quality, pollutant breakdown, 24h forecast, and personalized health guidance." />
+
+  <!-- Apple Touch Icon (Inline SVG Data URI) -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%230EA5E9'/%3E%3Cstop offset='100%25' stop-color='%2310B981'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='512' height='512' rx='112' fill='%230B1120'/%3E%3Ccircle cx='256' cy='256' r='160' fill='none' stroke='url(%23g)' stroke-width='36' stroke-linecap='round' stroke-dasharray='760 260' transform='rotate(-225 256 256)'/%3E%3Cpath d='M176 268c32-44 64-44 96 0s64 44 96 0' fill='none' stroke='%2338BDF8' stroke-width='26' stroke-linecap='round'/%3E%3Cpath d='M196 218c24-30 48-30 72 0s48 30 72 0' fill='none' stroke='%2334D399' stroke-width='20' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Plus Jakarta Sans', 'sans-serif'],
+          },
+          colors: {
+            night: {
+              950: '#070B14',
+              900: '#0B1120',
+              800: '#131C31',
+              700: '#1E293B',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #070B14;
+      color: #F8FAFC;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: none;
+    }
+
+    h1, h2, h3, .font-display {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    /* Mobile app shell */
+    .app-shell {
+      padding-top: calc(var(--sat) + 0.75rem);
+      padding-bottom: calc(var(--sab) + 5.75rem);
+    }
+
+    .bottom-nav {
+      padding-bottom: calc(var(--sab) + 0.5rem);
+    }
+
+    /* Glassmorphism panels */
+    .glass-card {
+      background: rgba(19, 28, 49, 0.72);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .glass-pill {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+
+    /* Radar GPS scanning pulse */
+    @keyframes radarPing {
+      0% { transform: scale(0.85); opacity: 0.75; }
+      100% { transform: scale(2.1); opacity: 0; }
+    }
+    .radar-ring {
+      animation: radarPing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+
+    /* Smooth Gauge Arc Transition */
+    #aqiGaugeArc {
+      transition: stroke-dashoffset 1s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.6s ease;
+    }
+
+    /* Ambient Glow Transition */
+    #ambientGlow {
+      transition: background 0.8s ease;
+    }
+
+    /* Character Idle Breathing, Floating & Blinking Animations */
+    @keyframes buddyFloat {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-5px); }
+    }
+    @keyframes buddyBreathe {
+      0%, 100% { transform: scaleY(1); }
+      50% { transform: scaleY(1.022); }
+    }
+    @keyframes buddyBlink {
+      0%, 92%, 100% { transform: scaleY(1); }
+      95% { transform: scaleY(0.08); }
+    }
+    @keyframes buddyTapBounce {
+      0% { transform: scale(1); }
+      35% { transform: scale(0.93, 1.06) translateY(-6px); }
+      70% { transform: scale(1.04, 0.96); }
+      100% { transform: scale(1); }
+    }
+    @keyframes particleDrift {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); opacity: 0.75; }
+      50% { transform: translate(6px, -8px) rotate(12deg); opacity: 1; }
+    }
+
+    .buddy-float {
+      animation: buddyFloat 3.6s ease-in-out infinite;
+    }
+    .buddy-breathe {
+      transform-origin: center bottom;
+      animation: buddyBreathe 3.2s ease-in-out infinite;
+    }
+    .buddy-eyes {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: buddyBlink 4.5s infinite;
+    }
+    .buddy-tap {
+      animation: buddyTapBounce 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .particle-drift {
+      animation: particleDrift 4s ease-in-out infinite;
+    }
+
+    /* Hide scrollbars cleanly on horizontal pill bars */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="min-h-screen flex justify-center bg-night-950 selection:bg-sky-500/30 selection:text-sky-200">
+
+  <!-- Toast Banner -->
+  <div id="toastBanner" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-3 max-w-[90vw]">
+    <div id="toastText" class="px-4 py-2.5 rounded-2xl text-xs font-semibold bg-slate-900/95 text-white border border-white/15 shadow-2xl backdrop-blur-md"></div>
+  </div>
+
+  <!-- Centered Mobile App Viewport (Edge-to-Edge on Phones, Sleek Device Frame on Desktop) -->
+  <div class="w-full max-w-md min-h-screen bg-night-900 sm:my-4 sm:min-h-[calc(100vh-2rem)] sm:rounded-[2.25rem] sm:border sm:border-white/10 sm:shadow-[0_25px_70px_-15px_rgba(0,0,0,0.85)] relative overflow-x-hidden flex flex-col">
+
+    <!-- Dynamic Ambient Atmospheric Glow -->
+    <div id="ambientGlow" class="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[420px] h-[340px] rounded-full blur-[90px] opacity-35" style="background: radial-gradient(circle, #10B981 0%, transparent 70%);"></div>
+
+    <!-- Main Scrollable App Body -->
+    <div class="app-shell px-4 flex-1 relative z-10 space-y-4">
+
+      <!-- Top Header: App Brand + GPS Location Trigger -->
+      <header class="flex items-center justify-between gap-2">
+        <button onclick="openLocationModal()" class="flex items-center gap-2.5 text-left group min-w-0 flex-1 py-1">
+          <div class="relative w-10 h-10 rounded-2xl bg-sky-500/15 border border-sky-400/25 flex items-center justify-center shrink-0">
+            <span id="gpsRadarPulse" class="hidden absolute inset-0 rounded-2xl bg-sky-400/40 radar-ring"></span>
+            <i data-lucide="navigation" class="w-4 h-4 text-sky-400"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5">
+              <span id="locationTitle" class="font-display font-bold text-base text-white truncate">Detecting GPS...</span>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 group-hover:text-white transition shrink-0"></i>
+            </div>
+            <p id="locationSubtitle" class="text-[11px] text-slate-400 truncate">Requesting device coordinates</p>
+          </div>
+        </button>
+
+        <div class="flex items-center gap-1.5 shrink-0">
+          <!-- Real-Time Language Selector -->
+          <div class="relative">
+            <select
+              id="languageSelect"
+              onchange="setLanguage(this.value)"
+              aria-label="Select Language"
+              class="appearance-none pl-2.5 pr-6 py-2 rounded-xl glass-pill text-[11px] font-bold text-slate-100 bg-night-800/90 hover:bg-white/10 focus:outline-none focus:border-sky-400 cursor-pointer transition"
+            >
+              <option value="en" class="bg-night-900 text-white">🌐 EN</option>
+              <option value="ko" class="bg-night-900 text-white">🇰🇷 한국어</option>
+              <option value="zh" class="bg-night-900 text-white">🇨🇳 中文</option>
+              <option value="mn" class="bg-night-900 text-white">🇲🇳 Монгол</option>
+              <option value="ja" class="bg-night-900 text-white">🇯🇵 日本語</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"></i>
+          </div>
+
+          <!-- US / EU AQI Standard Toggle -->
+          <button onclick="toggleAqiStandard()" id="standardToggleBtn" title="Switch US / EU AQI" class="px-2.5 py-2 rounded-xl glass-pill text-[11px] font-bold text-slate-200 hover:bg-white/10 active:scale-95 transition">
+            US AQI
+          </button>
+          <!-- Refresh GPS Button -->
+          <button onclick="detectDeviceGPS(true)" id="refreshGpsBtn" title="Use Live Phone GPS" class="p-2 rounded-xl glass-pill text-sky-400 hover:bg-sky-500/15 active:scale-95 transition" aria-label="Refresh GPS">
+            <i data-lucide="locate-fixed" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- Offline / Fallback Status Pill (Hidden when live) -->
+      <div id="offlineNotice" class="hidden items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-400/25 text-amber-200 text-xs">
+        <div class="flex items-center gap-2">
+          <i data-lucide="wifi-off" class="w-4 h-4 shrink-0 text-amber-400"></i>
+          <span id="offlineNoticeText">Showing cached/offline sample data</span>
+        </div>
+        <button onclick="fetchCurrentLocationData()" id="retryBtnText" class="font-bold underline">Retry</button>
+      </div>
+
+      <!-- ==================== VIEW 1: LIVE AIR & HEALTH ==================== -->
+      <main id="view-live" class="space-y-4">
+
+        <!-- Hero AQI Circular Gauge Card -->
+        <section class="glass-card rounded-3xl p-5 relative overflow-hidden">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+            <span class="inline-flex items-center gap-1.5 font-medium">
+              <span id="liveDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span id="lastUpdatedText">Live Local Sensor Grid</span>
+            </span>
+            <span id="dominantPollutantBadge" class="px-2 py-0.5 rounded-full bg-white/5 text-slate-300 font-semibold">
+              Primary: PM2.5
+            </span>
+          </div>
+
+          <!-- SVG Radial Gauge -->
+          <div class="relative w-52 h-44 mx-auto flex items-center justify-center my-1">
+            <svg class="w-full h-full overflow-visible" viewBox="0 0 220 190">
+              <defs>
+                <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+              </defs>
+              <!-- Background Track Arc (240 deg sweep) -->
+              <path
+                d="M 41 152 A 84 84 0 1 1 179 152"
+                fill="none"
+                stroke="rgba(255,255,255,0.08)"
+                stroke-width="14"
+                stroke-linecap="round"
+              />
+              <!-- Active Progress Arc -->
+              <path
+                id="aqiGaugeArc"
+                d="M 41 152 A 84 84 0 1 1 179 152"
+                fill="none"
+                stroke="#10B981"
+                stroke-width="14"
+                stroke-linecap="round"
+                stroke-dasharray="352"
+                stroke-dashoffset="352"
+                filter="url(#glowFilter)"
+              />
+            </svg>
+
+            <!-- Center Numeric Readout -->
+            <div class="absolute inset-0 flex flex-col items-center justify-center pt-3">
+              <span id="aqiHeroValue" class="font-display font-extrabold text-5xl tracking-tight text-white">--</span>
+              <span id="aqiStandardLabel" class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mt-0.5">US AQI</span>
+              <span id="aqiStatusPill" class="mt-2 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Scanning...
+              </span>
+            </div>
+          </div>
+
+          <!-- Short Summary Sentence -->
+          <p id="aqiSummarySentence" class="text-center text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
+            Acquiring local atmospheric telemetry for your exact GPS coordinates...
+          </p>
+
+          <!-- 4-Column Outdoor Weather & UV Strip -->
+          <div class="grid grid-cols-4 gap-2 mt-4 pt-4 border-t border-white/10">
+            <div class="glass-pill rounded-2xl p-2.5 text-center">
+              <i data-lucide="thermometer" class="w-4 h-4 text-amber-400 mx-auto mb-1"></i>
+              <div id="weatherTemp" class="text-sm font-bold text-white">--°</div>
+              <div id="labelWeatherTemp" class="text-[10px] text-slate-400">Temp</div>
+            </div>
+            <div class="glass-pill rounded-2xl p-2.5 text-center">
+              <i data-lucide="droplets" class="w-4 h-4 text-sky-400 mx-auto mb-1"></i>
+              <div id="weatherHumidity" class="text-sm font-bold text-white">--%</div>
+              <div id="labelWeatherHumidity" class="text-[10px] text-slate-400">Humidity</div>
+            </div>
+            <div class="glass-pill rounded-2xl p-2.5 text-center">
+              <i data-lucide="wind" class="w-4 h-4 text-teal-400 mx-auto mb-1"></i>
+              <div id="weatherWind" class="text-sm font-bold text-white">--</div>
+              <div id="labelWeatherWind" class="text-[10px] text-slate-400">km/h</div>
+            </div>
+            <div class="glass-pill rounded-2xl p-2.5 text-center">
+              <i data-lucide="sun" class="w-4 h-4 text-yellow-400 mx-auto mb-1"></i>
+              <div id="weatherUv" class="text-sm font-bold text-white">--</div>
+              <div id="labelWeatherUv" class="text-[10px] text-slate-400">UV Index</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== INTERACTIVE AIR BUDDY CHARACTER STAGE ==================== -->
+        <section class="glass-card rounded-3xl p-4 relative overflow-hidden">
+          <!-- Stage Header & Character Switcher -->
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 id="airBuddySectionTitle" class="font-display font-bold text-sm text-white flex items-center gap-1.5">
+                <i data-lucide="sparkles" class="w-4 h-4 text-sky-400"></i>
+                <span>Air Buddy Outfit Advisor</span>
+              </h2>
+              <p id="airBuddySubtitle" class="text-[11px] text-slate-400">Tap character for tips · Auto-dresses for air</p>
+            </div>
+
+            <!-- Mina / Leo / Both Toggle Pills -->
+            <div class="inline-flex rounded-xl bg-white/5 p-1 border border-white/10 shrink-0">
+              <button onclick="setBuddyCharacter('mina')" id="buddy-btn-mina" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-pink-500/25 text-pink-200 border border-pink-400/30 transition">
+                👧 Mina
+              </button>
+              <button onclick="setBuddyCharacter('leo')" id="buddy-btn-leo" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-white transition">
+                👦 Leo
+              </button>
+              <button onclick="setBuddyCharacter('both')" id="buddy-btn-both" class="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-white transition">
+                👫
+              </button>
+            </div>
+          </div>
+
+          <!-- Interactive Character Stage + Speech Bubble -->
+          <div class="rounded-2xl bg-gradient-to-b from-white/[0.04] to-night-950/60 border border-white/10 p-3.5 relative">
+            <div class="flex items-center gap-3">
+              <!-- Tappable SVG Character Stage -->
+              <button
+                type="button"
+                onclick="interactWithBuddy()"
+                id="buddyStageContainer"
+                aria-label="Tap Air Buddy Character"
+                class="relative shrink-0 flex items-center justify-center rounded-2xl bg-white/[0.03] border border-white/10 p-2 cursor-pointer focus:outline-none active:scale-95 transition select-none"
+              >
+                <!-- Dynamic SVG injected here -->
+              </button>
+
+              <!-- Outfit Badge + Speech Bubble -->
+              <div class="flex-1 min-w-0 space-y-2">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span id="buddyOutfitBadge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                    👕 Breezy Casual
+                  </span>
+                  <span id="buddyGearTag" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-slate-300">
+                    No Mask
+                  </span>
+                </div>
+
+                <!-- Speech Bubble -->
+                <div class="relative rounded-2xl bg-night-800/95 border border-white/10 p-3 text-xs text-slate-200 leading-relaxed shadow-inner">
+                  <p id="buddySpeechText">Hi! Tap me to check what to wear for today's air!</p>
+                </div>
+
+                <div id="buddyTapHint" class="text-[10px] text-sky-400/90 font-medium flex items-center gap-1">
+                  <i data-lucide="hand" class="w-3 h-3"></i>
+                  <span>Tap character for interactive tip</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Preview Air Levels Demo Bar -->
+            <div class="mt-3 pt-3 border-t border-white/10">
+              <div class="flex items-center justify-between mb-1.5">
+                <span id="previewBarLabel" class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Preview Air Levels</span>
+                <span id="previewModeIndicator" class="text-[10px] font-semibold text-emerald-400">● Live GPS</span>
+              </div>
+              <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                <button onclick="setSimulatedTier('live')" id="sim-btn-live" class="sim-tier-btn px-2.5 py-1 rounded-lg text-[10px] font-bold bg-sky-500 text-slate-950 whitespace-nowrap transition">
+                  Live GPS
+                </button>
+                <button onclick="setSimulatedTier('good')" id="sim-btn-good" class="sim-tier-btn px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 text-slate-300 hover:bg-white/10 whitespace-nowrap transition">
+                  Good (25)
+                </button>
+                <button onclick="setSimulatedTier('moderate')" id="sim-btn-moderate" class="sim-tier-btn px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 text-slate-300 hover:bg-white/10 whitespace-nowrap transition">
+                  Moderate (75)
+                </button>
+                <button onclick="setSimulatedTier('sensitive')" id="sim-btn-sensitive" class="sim-tier-btn px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 text-slate-300 hover:bg-white/10 whitespace-nowrap transition">
+                  Sensitive (125)
+                </button>
+                <button onclick="setSimulatedTier('unhealthy')" id="sim-btn-unhealthy" class="sim-tier-btn px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 text-slate-300 hover:bg-white/10 whitespace-nowrap transition">
+                  Unhealthy (175)
+                </button>
+                <button onclick="setSimulatedTier('hazardous')" id="sim-btn-hazardous" class="sim-tier-btn px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 text-slate-300 hover:bg-white/10 whitespace-nowrap transition">
+                  Hazardous (240)
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Actionable Health & Lifestyle Guidance -->
+        <section class="space-y-2.5">
+          <div class="flex items-center justify-between px-1">
+            <h2 id="healthSectionTitle" class="font-display font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-400"></i>
+              <span>Actionable Health Advice</span>
+            </h2>
+            <span id="healthWhoBadge" class="text-[11px] text-slate-400">WHO / EPA Guidance</span>
+          </div>
+
+          <div id="healthAdviceGrid" class="grid grid-cols-2 gap-2.5">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+        <!-- Quick Pollutant Highlights Preview -->
+        <section class="glass-card rounded-3xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 id="keyParticulatesTitle" class="font-display font-bold text-sm text-white">Key Particulates</h3>
+            <button onclick="switchMobileTab('pollutants')" id="allPollutantsLink" class="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1">
+              <span>All 6 Pollutants</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <div id="quickPollutantsRow" class="grid grid-cols-3 gap-2">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+      </main>
+
+      <!-- ==================== VIEW 2: DETAILED POLLUTANTS ==================== -->
+      <main id="view-pollutants" class="hidden space-y-4">
+        <div class="glass-card rounded-3xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 id="pollutantsViewTitle" class="font-display font-bold text-lg text-white">Pollutant Breakdown</h2>
+              <p id="pollutantsViewSubtitle" class="text-xs text-slate-400">Tap any pollutant card to learn health effects & WHO limits</p>
+            </div>
+            <div class="w-10 h-10 rounded-2xl bg-indigo-500/15 border border-indigo-400/25 flex items-center justify-center text-indigo-400">
+              <i data-lucide="microscope" class="w-5 h-5"></i>
+            </div>
+          </div>
+        </div>
+
+        <div id="pollutantsFullGrid" class="grid grid-cols-1 gap-3">
+          <!-- Populated dynamically -->
+        </div>
+      </main>
+
+      <!-- ==================== VIEW 3: 24-HOUR FORECAST TREND ==================== -->
+      <main id="view-trend" class="hidden space-y-4">
+        <div class="glass-card rounded-3xl p-5 space-y-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <h2 id="trendViewTitle" class="font-display font-bold text-lg text-white">24-Hour Air Forecast</h2>
+              <p id="trendViewSubtitle" class="text-xs text-slate-400">Plan your outdoor workouts during the cleanest hours</p>
+            </div>
+            <div class="inline-flex rounded-xl bg-white/5 p-1 border border-white/10">
+              <button onclick="setTrendMetric('us_aqi')" id="trend-btn-us_aqi" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-500 text-slate-950 transition">AQI</button>
+              <button onclick="setTrendMetric('pm2_5')" id="trend-btn-pm2_5" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-300 transition">PM2.5</button>
+              <button onclick="setTrendMetric('ozone')" id="trend-btn-ozone" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-300 transition">O₃</button>
+            </div>
+          </div>
+
+          <!-- Best Outdoor Window Callout -->
+          <div id="bestWindowCard" class="rounded-2xl bg-emerald-500/10 border border-emerald-400/25 p-3.5 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+              <i data-lucide="sparkles" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div id="cleanestWindowLabel" class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Cleanest Window Next 24h</div>
+              <div id="bestWindowText" class="text-sm font-bold text-white mt-0.5">Calculating best time...</div>
+            </div>
+          </div>
+
+          <!-- Interactive SVG Bar/Area Chart -->
+          <div class="pt-2">
+            <div id="hourlyChartContainer" class="w-full h-48 relative">
+              <!-- SVG rendered dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Hourly Breakdown List -->
+        <div class="glass-card rounded-3xl p-4 space-y-2">
+          <h3 id="hourlyBreakdownTitle" class="font-display font-bold text-sm text-white px-1 mb-2">Hour-by-Hour Breakdown</h3>
+          <div id="hourlyListContainer" class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </main>
+
+      <!-- ==================== VIEW 4: INSTALL APP (iOS & ANDROID PWA) ==================== -->
+      <main id="view-install" class="hidden space-y-4">
+        <div class="glass-card rounded-3xl p-5 space-y-4">
+          <div class="flex items-center gap-3.5">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-emerald-500 flex items-center justify-center text-slate-950 shadow-lg shrink-0">
+              <i data-lucide="wind" class="w-7 h-7 stroke-[2.5]"></i>
+            </div>
+            <div>
+              <div id="installFreeBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-400/30 mb-1">
+                100% Free · No App Store Needed
+              </div>
+              <h2 id="installViewTitle" class="font-display font-extrabold text-xl text-white">Install AeroSense</h2>
+              <p id="installViewSubtitle" class="text-xs text-slate-400">Works natively on iPhone & Android</p>
+            </div>
+          </div>
+
+          <!-- Native Android / Chrome One-Tap Install Button (Shown when supported) -->
+          <button id="nativeInstallBtn" onclick="triggerNativeInstall()" class="hidden w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-400 to-emerald-400 text-slate-950 font-display font-extrabold text-sm shadow-lg shadow-sky-500/20 active:scale-[0.99] transition flex items-center justify-center gap-2">
+            <i data-lucide="download" class="w-4 h-4 stroke-[2.5]"></i>
+            <span id="nativeInstallBtnText">Install App to Home Screen</span>
+          </button>
+
+          <!-- iPhone (iOS Safari) Guide -->
+          <div class="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3">
+            <div class="flex items-center gap-2">
+              <span id="iosGuideHeader" class="px-2.5 py-1 rounded-lg bg-slate-800 text-white text-xs font-bold">iPhone & iPad (Safari)</span>
+            </div>
+            <ol id="iosGuideSteps" class="space-y-2.5 text-xs text-slate-300">
+              <!-- Translated dynamically -->
+            </ol>
+          </div>
+
+          <!-- Android (Chrome) Guide -->
+          <div class="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3">
+            <div class="flex items-center gap-2">
+              <span id="androidGuideHeader" class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-bold">Android (Chrome)</span>
+            </div>
+            <ol id="androidGuideSteps" class="space-y-2.5 text-xs text-slate-300">
+              <!-- Translated dynamically -->
+            </ol>
+          </div>
+
+          <!-- PWA Diagnostics Status -->
+          <div class="rounded-2xl bg-slate-950/60 border border-white/5 p-3.5 flex items-center justify-between text-[11px] text-slate-400">
+            <span id="pwaEngineLabel">PWA Manifest & Offline Engine</span>
+            <span id="pwaStatusBadge" class="font-bold text-emerald-400">Active & Ready</span>
+          </div>
+        </div>
+      </main>
+
+    </div>
+
+    <!-- Fixed Thumb-Friendly Bottom Navigation Bar -->
+    <nav class="bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-30 bg-night-950/90 backdrop-blur-xl border-t border-white/10 px-3 pt-2">
+      <div class="grid grid-cols-4 gap-1">
+        <button onclick="switchMobileTab('live')" id="nav-live" class="mob-nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-sky-400 bg-sky-500/10 transition">
+          <i data-lucide="gauge" class="w-5 h-5"></i>
+          <span id="navLabelLive" class="text-[10px] font-bold mt-1">Live Air</span>
+        </button>
+        <button onclick="switchMobileTab('pollutants')" id="nav-pollutants" class="mob-nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition">
+          <i data-lucide="layers" class="w-5 h-5"></i>
+          <span id="navLabelPollutants" class="text-[10px] font-semibold mt-1">Pollutants</span>
+        </button>
+        <button onclick="switchMobileTab('trend')" id="nav-trend" class="mob-nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition">
+          <i data-lucide="trending-up" class="w-5 h-5"></i>
+          <span id="navLabelTrend" class="text-[10px] font-semibold mt-1">24h Trend</span>
+        </button>
+        <button onclick="switchMobileTab('install')" id="nav-install" class="mob-nav-btn flex flex-col items-center justify-center py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 transition">
+          <i data-lucide="smartphone" class="w-5 h-5"></i>
+          <span id="navLabelInstall" class="text-[10px] font-semibold mt-1">Install App</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ==================== MODAL 1: LOCATION SWITCHER & SEARCH ==================== -->
+    <div id="locationModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center">
+      <div class="w-full max-w-md bg-night-800 border-t sm:border border-white/15 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[88vh] flex flex-col">
+        <div class="flex items-center justify-between">
+          <h3 id="modalLocationTitle" class="font-display font-bold text-lg text-white">Select Location</h3>
+          <button onclick="closeLocationModal()" class="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Use Current Phone GPS Button -->
+        <button onclick="detectDeviceGPS(true); closeLocationModal();" class="w-full py-3 px-4 rounded-2xl bg-sky-500/15 border border-sky-400/30 text-sky-300 font-bold text-xs flex items-center justify-center gap-2 hover:bg-sky-500/25 transition">
+          <i data-lucide="locate-fixed" class="w-4 h-4"></i>
+          <span id="useGpsBtnText">Use My Current Device GPS Location</span>
+        </button>
+
+        <!-- Search Any City Globally -->
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+          <input
+            type="text"
+            id="citySearchInput"
+            oninput="handleCitySearch(this.value)"
+            placeholder="Search any suburb or city (e.g. Parramatta, Tokyo)..."
+            class="w-full pl-10 pr-4 py-3 rounded-2xl bg-night-900 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+          />
+        </div>
+
+        <!-- Search Results or Quick Presets -->
+        <div id="cityListContainer" class="space-y-1.5 overflow-y-auto flex-1 pr-1">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MODAL 2: POLLUTANT DETAIL SHEET ==================== -->
+    <div id="pollutantDetailModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center">
+      <div class="w-full max-w-md bg-night-800 border-t sm:border border-white/15 rounded-t-3xl sm:rounded-3xl p-5 space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <span id="modalPolFormula" class="px-2.5 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 text-xs font-extrabold">PM2.5</span>
+            <h3 id="modalPolName" class="font-display font-bold text-xl text-white mt-1.5">Fine Particulate Matter</h3>
+          </div>
+          <button onclick="closePollutantModal()" class="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="glass-pill rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <div id="modalCurrentConcLabel" class="text-[11px] text-slate-400">Current Concentration</div>
+            <div id="modalPolValue" class="font-display font-extrabold text-2xl text-white mt-0.5">-- µg/m³</div>
+          </div>
+          <div class="text-right">
+            <div id="modalWhoGuidelineLabel" class="text-[11px] text-slate-400">WHO 24h Guideline</div>
+            <div id="modalPolLimit" class="text-sm font-bold text-emerald-400 mt-0.5">-- µg/m³</div>
+          </div>
+        </div>
+
+        <div class="space-y-2 text-xs text-slate-300 leading-relaxed">
+          <div id="modalWhatIsTitle" class="font-bold text-white">What is it & where does it come from?</div>
+          <p id="modalPolDesc"></p>
+          <div id="modalHealthImpactTitle" class="font-bold text-white pt-1">Health Impact</div>
+          <p id="modalPolHealth"></p>
+        </div>
+
+        <button onclick="closePollutantModal()" id="modalGotItBtn" class="w-full py-3 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/15 transition">
+          Got It
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. REAL-TIME MULTI-LANGUAGE TRANSLATION DICTIONARY (EN, KO, ZH, MN, JA)
+    // =========================================================================
+    const TRANSLATIONS = {
+      en: {
+        langName: 'English',
+        detectingGps: 'Detecting GPS...',
+        requestingCoords: 'Requesting device coordinates',
+        locatingViaGps: 'Locating via GPS...',
+        acquiringCoords: 'Acquiring high-accuracy phone coordinates',
+        liveGpsPrefix: 'Live GPS',
+        liveSensorGrid: 'Live Local Sensor Grid',
+        updatedAt: 'Updated {time} · Open-Meteo Live',
+        primaryPrefix: 'Primary',
+        scanning: 'Scanning...',
+        acquiringTelemetry: 'Acquiring local atmospheric telemetry for your exact GPS coordinates...',
+        offlineSample: 'Showing cached/offline sample data',
+        retry: 'Retry',
+        temp: 'Temp',
+        humidity: 'Humidity',
+        uvIndex: 'UV Index',
+        navLive: 'Live Air',
+        navPollutants: 'Pollutants',
+        navTrend: '24h Trend',
+        navInstall: 'Install App',
+        healthTitle: 'Actionable Health Advice',
+        whoGuidance: 'WHO / EPA Guidance',
+        keyParticulates: 'Key Particulates',
+        all6Pollutants: 'All 6 Pollutants',
+        pollutantsTitle: 'Pollutant Breakdown',
+        pollutantsSubtitle: 'Tap any pollutant card to learn health effects & WHO limits',
+        trendTitle: '24-Hour Air Forecast',
+        trendSubtitle: 'Plan your outdoor workouts during the cleanest hours',
+        cleanestWindow: 'Cleanest Window Next 24h',
+        calculatingBest: 'Calculating best time...',
+        bestWindowFmt: 'Around {time} (Forecast US AQI: {aqi})',
+        hourlyBreakdown: 'Hour-by-Hour Breakdown',
+        now: 'Now',
+        installFreeBadge: '100% Free · No App Store Needed',
+        installTitle: 'Install AeroSense',
+        installSubtitle: 'Works natively on iPhone & Android',
+        installBtn: 'Install App to Home Screen',
+        iosHeader: 'iPhone & iPad (Safari)',
+        iosSteps: [
+          'Open this web link in <strong>Safari</strong> on your iPhone.',
+          'Tap the <strong>Share</strong> icon at the bottom of the screen.',
+          'Scroll down and tap <strong>"Add to Home Screen"</strong>, then tap <strong>Add</strong>.'
+        ],
+        androidHeader: 'Android (Chrome)',
+        androidSteps: [
+          'Open this link in <strong>Google Chrome</strong> on your Android phone.',
+          'Tap the <strong>⋮ Menu</strong> button in the top-right corner.',
+          'Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.'
+        ],
+        pwaEngine: 'PWA Manifest & Offline Engine',
+        pwaReady: 'Active & Ready',
+        selectLocation: 'Select Location',
+        useGpsBtn: 'Use My Current Device GPS Location',
+        searchPlaceholder: 'Search any suburb or city (e.g. Parramatta, Tokyo)...',
+        popularCities: 'Popular Cities & Sydney Suburbs',
+        globalResults: 'Global Search Results',
+        noCities: 'No matching cities found.',
+        currentConc: 'Current Concentration',
+        whoGuideline: 'WHO 24h Guideline',
+        whatIsIt: 'What is it & where does it come from?',
+        healthImpact: 'Health Impact',
+        gotIt: 'Got It',
+        optimal: 'Optimal',
+        nearWho: 'Near WHO Limit',
+        aboveWho: 'Above WHO Limit',
+        whoLimitShort: 'WHO Limit',
+        // Air Buddy Translations
+        buddyTitle: 'Air Buddy Outfit Advisor',
+        buddySubtitle: 'Tap character for tips · Auto-dresses for air',
+        buddyMina: 'Mina',
+        buddyLeo: 'Leo',
+        buddyTapHint: 'Tap character for interactive tip',
+        previewAirLevels: 'Preview Air Levels',
+        tierLive: 'Live GPS',
+        tierGood: 'Good (25)',
+        tierMod: 'Moderate (75)',
+        tierSens: 'Sensitive (125)',
+        tierUnh: 'Unhealthy (175)',
+        tierHaz: 'Hazardous (240)',
+        // Categories
+        catGood: 'Good',
+        catFair: 'Fair',
+        catMod: 'Moderate',
+        catSens: 'Sensitive Groups',
+        catPoor: 'Poor',
+        catUnh: 'Unhealthy',
+        catVeryUnh: 'Very Unhealthy',
+        catHaz: 'Hazardous',
+        sumGood: 'Air quality is crisp and healthy with minimal pollution risk. Enjoy outdoor activities freely.',
+        sumMod: 'Air quality is acceptable, though sensitive individuals may experience mild respiratory irritation.',
+        sumSens: 'People with asthma, children, and older adults should shorten intense outdoor exercise.',
+        sumUnh: 'Everyone may begin to experience respiratory effects. Limit prolonged outdoor exertion.',
+        sumVeryUnh: 'Health alert: significant risk for all groups. Stay indoors with air purification if possible.',
+        sumHaz: 'Emergency air conditions. Avoid all outdoor physical activity and wear a P2/N95 respirator.',
+        // Health Cards
+        hcExercise: 'Outdoor Exercise',
+        hcVent: 'Home Ventilation',
+        hcSensitive: 'Sensitive Groups',
+        hcMask: 'Mask Guidance',
+        hcUv: 'UV & Sun Care',
+        stIdeal: 'Ideal Conditions',
+        stSafeMost: 'Safe for Most',
+        stLimitInt: 'Limit Intensity',
+        stMoveIndoor: 'Move Indoors',
+        stOpenWin: 'Open Windows',
+        stKeepClosed: 'Keep Closed',
+        stLowRisk: 'Low Risk',
+        stMildCaution: 'Mild Caution',
+        stHighCaution: 'High Caution',
+        stMaskAdv: 'P2 / N95 Advised',
+        stHighUv: 'High UV',
+        stNoMask: 'No Mask Needed',
+        dtExGood: 'Full-intensity running & cycling recommended.',
+        dtExMod: 'Great for outdoor exercise; take breaks if sensitive.',
+        dtExBad: 'Reduce heavy cardio outdoors; opt for indoor gym.',
+        dtVentOpen: 'Bring fresh outdoor air in to lower indoor CO₂.',
+        dtVentClose: 'Close exterior windows & run AC on recirculate.',
+        dtSensGood: 'No special precautions needed for asthma/allergies.',
+        dtSensWarn: 'Keep reliever inhaler handy during outdoor walks.',
+        dtMaskOn: 'Wear a fitted P2/N95 mask on busy streets.',
+        dtUvHigh: 'Apply SPF 50+ sunscreen & sunglasses outdoors.',
+        dtMaskOff: 'Clean ambient air—no respiratory mask required.',
+        // Buddy Outfits & Quotes
+        outfitGood: 'Breezy Casual',
+        outfitGoodUv: 'Sun Hat & Shades',
+        gearGood: 'No Mask · Fresh Air',
+        gearGoodUv: 'UV Sun Protection',
+        outfitMod: 'Light Cardigan & Scarf',
+        gearMod: 'Hydration Bottle',
+        outfitSens: 'Windbreaker & Cloth Mask',
+        gearSens: 'Light Face Mask',
+        outfitUnh: 'Tech Parka & N95 Mask',
+        gearUnh: 'KN95 / N95 + Visor',
+        outfitHaz: 'Full Hazmat Shield Coat',
+        gearHaz: 'Respirator + Goggles',
+        quotes: {
+          good: [
+            'Fresh breeze today! Light casual clothes are perfect for a walk outside.',
+            'Super clean air! Open your windows to refresh your room naturally.',
+            'Zero smog detected—great time for outdoor sports or cycling!'
+          ],
+          moderate: [
+            'Air is decent, so I put on a light cardigan and brought water!',
+            'If you have allergies, take it easy during long outdoor jogs.',
+            'A light layer keeps you comfy while air quality stays moderate.'
+          ],
+          sensitive: [
+            'Particulates are rising! I wore my light mask and windbreaker.',
+            'Sensitive groups should shorten heavy outdoor workouts today.',
+            'Keep windows mostly closed near busy traffic roads right now.'
+          ],
+          unhealthy: [
+            'Hazy air alert! Switched to my hooded tech-parka and KN95 mask.',
+            'Protect your lungs—avoid running outdoors and turn on air purifiers!',
+            'My protective glasses and N95 mask block fine PM2.5 particles.'
+          ],
+          hazardous: [
+            'Hazardous smog! Full respirator gear and sealed coat activated!',
+            'Stay indoors with doors and windows tightly shut until air clears.',
+            'Emergency level AQI—never go outside without a tight P2/N95 mask!'
+          ]
+        },
+        pollutants: {
+          pm2_5: { name: 'Fine Particulate Matter', desc: 'Microscopic inhalable particles smaller than 2.5 µm from vehicle exhaust and smoke.', health: 'Penetrates deep into lungs and bloodstream, triggering asthma and cardiovascular strain.' },
+          pm10: { name: 'Coarse Inhalable Particles', desc: 'Airborne dust, pollen, mold spores, and road wear particles smaller than 10 µm.', health: 'Irritates eyes, nose, and upper airways; aggravates seasonal allergies.' },
+          ozone: { name: 'Ground-Level Ozone', desc: 'Formed when sunlight reacts with traffic emissions on warm sunny afternoons.', health: 'Causes chest tightness, coughing, and reduced lung capacity during exercise.' },
+          nitrogen_dioxide: { name: 'Nitrogen Dioxide', desc: 'Reactive gas produced by motor vehicles, gas stoves, and power plants.', health: 'Inflames airway linings and increases respiratory infection risk.' },
+          sulphur_dioxide: { name: 'Sulphur Dioxide', desc: 'Produced by burning sulphur-containing fuels in shipping and industry.', health: 'Can cause rapid airway constriction and shortness of breath in asthma.' },
+          carbon_monoxide: { name: 'Carbon Monoxide', desc: 'Colorless, odorless gas from incomplete fuel combustion in engines and heaters.', health: 'Reduces oxygen delivery to organs; elevated roadside levels cause fatigue.' }
+        }
+      },
+
+      ko: {
+        langName: '한국어',
+        detectingGps: 'GPS 위치 확인 중...',
+        requestingCoords: '기기 좌표 요청 중',
+        locatingViaGps: 'GPS로 위치 찾는 중...',
+        acquiringCoords: '정확한 휴대폰 좌표를 가져오는 중입니다',
+        liveGpsPrefix: '실시간 GPS',
+        liveSensorGrid: '실시간 지역 대기 센서',
+        updatedAt: '{time} 업데이트 · Open-Meteo 실시간',
+        primaryPrefix: '주요 오염물질',
+        scanning: '스캔 중...',
+        acquiringTelemetry: '현재 GPS 좌표의 실시간 대기질 데이터를 불러오는 중입니다...',
+        offlineSample: '오프라인 샘플 데이터를 표시 중입니다',
+        retry: '다시 시도',
+        temp: '기온',
+        humidity: '습도',
+        uvIndex: '자외선',
+        navLive: '실시간 대기',
+        navPollutants: '오염물질',
+        navTrend: '24시간 예보',
+        navInstall: '앱 설치',
+        healthTitle: '맞춤형 건강 행동 요령',
+        whoGuidance: 'WHO / EPA 기준',
+        keyParticulates: '주요 미세먼지',
+        all6Pollutants: '6대 오염물질 전체',
+        pollutantsTitle: '오염물질 상세 분석',
+        pollutantsSubtitle: '카드를 탭하면 건강 영향 및 WHO 권고 기준을 볼 수 있습니다',
+        trendTitle: '24시간 대기질 예보',
+        trendSubtitle: '공기가 가장 깨끗한 시간대에 야외 운동을 계획하세요',
+        cleanestWindow: '향후 24시간 가장 깨끗한 시간',
+        calculatingBest: '최적 시간 계산 중...',
+        bestWindowFmt: '{time}경 (예상 US AQI: {aqi})',
+        hourlyBreakdown: '시간별 상세 예보',
+        now: '현재',
+        installFreeBadge: '100% 무료 · 앱스토어 불필요',
+        installTitle: 'AeroSense 앱 설치',
+        installSubtitle: '아이폰 및 안드로이드 완벽 지원',
+        installBtn: '홈 화면에 앱 설치하기',
+        iosHeader: '아이폰 & 아이패드 (Safari)',
+        iosSteps: [
+          '아이폰 <strong>Safari</strong> 브라우저에서 이 링크를 엽니다.',
+          '화면 하단의 <strong>공유</strong> 아이콘을 탭합니다.',
+          '아래로 스크롤하여 <strong>"홈 화면에 추가"</strong>를 누른 뒤 <strong>추가</strong>를 탭하세요.'
+        ],
+        androidHeader: '안드로이드 (Chrome)',
+        androidSteps: [
+          '안드로이드 폰의 <strong>Chrome</strong> 브라우저에서 이 링크를 엽니다.',
+          '오른쪽 상단의 <strong>⋮ 메뉴</strong> 버튼을 탭합니다.',
+          '<strong>"앱 설치"</strong> 또는 <strong>"홈 화면에 추가"</strong>를 선택하세요.'
+        ],
+        pwaEngine: 'PWA 매니페스트 및 오프라인 엔진',
+        pwaReady: '활성화됨',
+        selectLocation: '위치 선택',
+        useGpsBtn: '현재 기기 GPS 위치 사용',
+        searchPlaceholder: '도시 또는 지역 검색 (예: 서울, 도쿄, 시드니)...',
+        popularCities: '주요 도시 및 지역',
+        globalResults: '전 세계 검색 결과',
+        noCities: '일치하는 도시를 찾을 수 없습니다.',
+        currentConc: '현재 농도',
+        whoGuideline: 'WHO 24시간 권고 기준',
+        whatIsIt: '무엇이며 어디서 발생하나요?',
+        healthImpact: '건강에 미치는 영향',
+        gotIt: '확인',
+        optimal: '좋음',
+        nearWho: 'WHO 기준 근접',
+        aboveWho: 'WHO 기준 초과',
+        whoLimitShort: 'WHO 기준',
+        buddyTitle: '에어 버디 옷차림 가이드',
+        buddySubtitle: '캐릭터를 탭해보세요 · 대기질에 맞춰 자동 변신',
+        buddyMina: '미나',
+        buddyLeo: '레오',
+        buddyTapHint: '캐릭터를 탭하면 오늘의 팁을 알려줘요',
+        previewAirLevels: '대기질 단계별 의상 미리보기',
+        tierLive: '실시간 GPS',
+        tierGood: '좋음 (25)',
+        tierMod: '보통 (75)',
+        tierSens: '민감군 주의 (125)',
+        tierUnh: '나쁨 (175)',
+        tierHaz: '매우 위험 (240)',
+        catGood: '좋음',
+        catFair: '양호',
+        catMod: '보통',
+        catSens: '민감군 주의',
+        catPoor: '나쁨',
+        catUnh: '나쁨',
+        catVeryUnh: '매우 나쁨',
+        catHaz: '위험',
+        sumGood: '공기가 매우 맑고 쾌적합니다. 모든 야외 활동과 자연 환기에 최적입니다.',
+        sumMod: '대기질이 무난한 편이나, 호흡기 민감군은 장시간 야외 활동 시 주의하세요.',
+        sumSens: '천식 환자, 어린이, 노약자는 격렬한 야외 운동 시간을 줄이는 것이 좋습니다.',
+        sumUnh: '모든 사람의 호흡기에 영향을 줄 수 있습니다. 장시간 야외 활동을 자제하세요.',
+        sumVeryUnh: '건강 경보! 가급적 실내에 머물고 공기청정기를 가동하세요.',
+        sumHaz: '긴급 대기 오염 경보! 모든 야외 활동을 중단하고 KF94/N95 마스크를 착용하세요.',
+        hcExercise: '야외 운동',
+        hcVent: '실내 환기',
+        hcSensitive: '민감군 안내',
+        hcMask: '마스크 착용',
+        hcUv: '자외선 케어',
+        stIdeal: '최적 조건',
+        stSafeMost: '야외 활동 가능',
+        stLimitInt: '강도 조절',
+        stMoveIndoor: '실내 운동 권장',
+        stOpenWin: '창문 환기 추천',
+        stKeepClosed: '창문 닫기',
+        stLowRisk: '위험 낮음',
+        stMildCaution: '약간 주의',
+        stHighCaution: '높은 주의',
+        stMaskAdv: 'KF94/N95 권장',
+        stHighUv: '자외선 높음',
+        stNoMask: '마스크 불필요',
+        dtExGood: '러닝 및 사이클링 등 모든 야외 운동에 좋습니다.',
+        dtExMod: '가벼운 야외 운동이 가능하며 민감군은 휴식을 취하세요.',
+        dtExBad: '야외 유산소 운동을 줄이고 실내 헬스장을 이용하세요.',
+        dtVentOpen: '창문을 열어 신선한 공기로 실내 CO₂를 낮추세요.',
+        dtVentClose: '창문을 닫고 에어컨/공기청정기 순환 모드를 켜세요.',
+        dtSensGood: '천식이나 알레르기 환자에게 특별한 주의가 필요 없습니다.',
+        dtSensWarn: '외출 시 호흡기 완화제를 휴대하는 것이 안전합니다.',
+        dtMaskOn: '도로변 외출 시 밀착형 KF94/N95 마스크를 착용하세요.',
+        dtUvHigh: '야외 활동 시 자외선 차단제와 선글라스를 착용하세요.',
+        dtMaskOff: '공기가 깨끗해 마스크 없이도 쾌적합니다.',
+        outfitGood: '산뜻한 캐주얼룩',
+        outfitGoodUv: '햇빛 모자 & 선글라스',
+        gearGood: '노마스크 · 상쾌한 공기',
+        gearGoodUv: '자외선 차단 아이템',
+        outfitMod: '가벼운 가디건 & 스카프',
+        gearMod: '수분 보충 물병',
+        outfitSens: '바람막이 & 일반 마스크',
+        gearSens: '보건용 마스크 착용',
+        outfitUnh: '후드 파카 & KF94 마스크',
+        gearUnh: 'KF94/N95 + 보호 안경',
+        outfitHaz: '완전 방호 방진 코트',
+        gearHaz: '방독 호흡기 + 고글',
+        quotes: {
+          good: [
+            '오늘 공기 정말 상쾌해요! 가벼운 옷차림으로 산책하기 딱 좋아요.',
+            '미세먼지 걱정 제로! 창문을 활짝 열어 실내 공기를 환기해 보세요.',
+            '맑은 하늘과 깨끗한 바람! 야외 러닝이나 자전거 타기 최고의 날이에요.'
+          ],
+          moderate: [
+            '공기가 무난해서 가벼운 가디건에 물병을 챙겼어요!',
+            '알레르기가 있다면 장시간 야외 운동 시 중간중간 휴식하세요.',
+            '일교차와 미세먼지에 대비해 얇은 겉옷을 걸치면 좋아요.'
+          ],
+          sensitive: [
+            '미세먼지가 조금씩 올라가고 있어요! 마스크와 바람막이를 착용했어요.',
+            '어린이와 호흡기 민감군은 야외 활동 시간을 줄이는 게 좋아요.',
+            '차량이 많은 도로변 근처에서는 창문을 닫아두세요.'
+          ],
+          unhealthy: [
+            '공기가 탁해요! 후드 파카와 KF94 마스크로 단단히 무장했어요.',
+            '폐 건강을 위해 야외 러닝은 피하고 실내 공기청정기를 켜세요!',
+            '보호 안경과 N95 마스크가 초미세먼지(PM2.5)를 막아줍니다.'
+          ],
+          hazardous: [
+            '위험 수준 스모그 경보! 완전 방호복과 고글, 호흡기를 착용했어요!',
+            '공기가 맑아질 때까지 창문을 꼭 닫고 실내에 머무르세요.',
+            '외출이 꼭 필요하다면 밀착형 P2/N95 마스크를 반드시 착용하세요!'
+          ]
+        },
+        pollutants: {
+          pm2_5: { name: '초미세먼지 (PM2.5)', desc: '지름 2.5µm 이하의 매우 작은 먼지로 자동차 배기가스와 연기에서 발생합니다.', health: '폐포 깊숙이 침투해 혈관으로 유입되며 천식과 심혈관 질환을 악화시킬 수 있습니다.' },
+          pm10: { name: '미세먼지 (PM10)', desc: '지름 10µm 이하의 도로 먼지, 꽃가루, 곰팡이 포자 등 부유 입자입니다.', health: '눈, 코, 상부 호흡기를 자극하고 알레르기 비염과 기관지염을 유발합니다.' },
+          ozone: { name: '오존 (O₃)', desc: '강한 햇빛과 자동차 배출가스가 광화학 반응을 일으켜 오후에 주로 생성됩니다.', health: '가슴 답답함, 기침, 목 따가움을 유발하고 폐 기능을 일시적으로 저하시킵니다.' },
+          nitrogen_dioxide: { name: '이산화질소 (NO₂)', desc: '자동차 엔진, 가스레인지, 발전소 연소 과정에서 배출되는 자극성 가스입니다.', health: '기도 점막에 염증을 일으키고 호흡기 감염에 대한 저항력을 떨어뜨립니다.' },
+          sulphur_dioxide: { name: '아황산가스 (SO₂)', desc: '선박 및 산업 시설에서 황 함유 연료를 태울 때 발생하는 가스입니다.', health: '천식 환자에게 급성 기관지 수축과 호흡 곤란을 일으킬 수 있습니다.' },
+          carbon_monoxide: { name: '일산화탄소 (CO)', desc: '연료의 불완전 연소로 발생하는 무색·무취의 유해 가스입니다.', health: '체내 산소 운반 능력을 떨어뜨려 피로감과 두통을 유발합니다.' }
+        }
+      },
+
+      zh: {
+        langName: '中文',
+        detectingGps: '正在获取 GPS 定位...',
+        requestingCoords: '正在请求设备坐标',
+        locatingViaGps: '正在通过 GPS 定位...',
+        acquiringCoords: '正在获取高精度手机位置坐标',
+        liveGpsPrefix: '实时 GPS',
+        liveSensorGrid: '本地实时空气监测网',
+        updatedAt: '{time} 更新 · Open-Meteo 实时数据',
+        primaryPrefix: '首要污染物',
+        scanning: '扫描中...',
+        acquiringTelemetry: '正在获取您当前 GPS 位置的实时大气环境数据...',
+        offlineSample: '当前显示离线缓存示例数据',
+        retry: '重试',
+        temp: '气温',
+        humidity: '湿度',
+        uvIndex: '紫外线',
+        navLive: '实时空气',
+        navPollutants: '污染物',
+        navTrend: '24小时趋势',
+        navInstall: '安装应用',
+        healthTitle: '健康与出行建议',
+        whoGuidance: 'WHO / EPA 标准',
+        keyParticulates: '核心颗粒物',
+        all6Pollutants: '查看全部 6 项指标',
+        pollutantsTitle: '污染物详细分析',
+        pollutantsSubtitle: '点击任意污染物卡片查看健康影响与世卫组织限值',
+        trendTitle: '24 小时空气预报',
+        trendSubtitle: '选择空气最清新的时段安排户外运动',
+        cleanestWindow: '未来 24 小时最清新时段',
+        calculatingBest: '正在计算最佳时段...',
+        bestWindowFmt: '约 {time}（预计 US AQI: {aqi}）',
+        hourlyBreakdown: '逐小时空气质量详情',
+        now: '现在',
+        installFreeBadge: '100% 免费 · 无需应用商店',
+        installTitle: '安装 AeroSense',
+        installSubtitle: '完美适配 iPhone 与 Android 手机',
+        installBtn: '添加到手机主屏幕',
+        iosHeader: 'iPhone & iPad (Safari 浏览器)',
+        iosSteps: [
+          '在 iPhone 上使用 <strong>Safari</strong> 浏览器打开此链接。',
+          '点击屏幕底部的 <strong>分享</strong> 图标。',
+          '向下滑动并选择 <strong>“添加到主屏幕”</strong>，然后点击 <strong>添加</strong>。'
+        ],
+        androidHeader: 'Android 安卓 (Chrome 浏览器)',
+        androidSteps: [
+          '在安卓手机上使用 <strong>Chrome</strong> 浏览器打开此链接。',
+          '点击右上角的 <strong>⋮ 菜单</strong> 按钮。',
+          '点击 <strong>“安装应用”</strong> 或 <strong>“添加到主屏幕”</strong>。'
+        ],
+        pwaEngine: 'PWA 离线缓存引擎',
+        pwaReady: '已激活就绪',
+        selectLocation: '选择城市或位置',
+        useGpsBtn: '使用我当前手机的 GPS 定位',
+        searchPlaceholder: '搜索任意城市或地区（如：北京、上海、悉尼）...',
+        popularCities: '热门城市与地区',
+        globalResults: '全球搜索结果',
+        noCities: '未找到匹配的城市。',
+        currentConc: '当前实时浓度',
+        whoGuideline: 'WHO 24小时指导限值',
+        whatIsIt: '它是什么？主要来源有哪些？',
+        healthImpact: '对健康的影响',
+        gotIt: '知道了',
+        optimal: '优秀',
+        nearWho: '接近 WHO 限值',
+        aboveWho: '超过 WHO 限值',
+        whoLimitShort: 'WHO 限值',
+        buddyTitle: '空气伙伴穿搭顾问',
+        buddySubtitle: '点击角色获取提示 · 根据空气自动换装',
+        buddyMina: '米娜',
+        buddyLeo: '里奥',
+        buddyTapHint: '点击小人查看互动健康贴士',
+        previewAirLevels: '预览不同空气等级穿搭',
+        tierLive: '实时 GPS',
+        tierGood: '优 (25)',
+        tierMod: '良 (75)',
+        tierSens: '轻度敏感 (125)',
+        tierUnh: '中重度污染 (175)',
+        tierHaz: '严重危害 (240)',
+        catGood: '优',
+        catFair: '良好',
+        catMod: '良',
+        catSens: '敏感人群注意',
+        catPoor: '较差',
+        catUnh: '不健康',
+        catVeryUnh: '非常不健康',
+        catHaz: '严重危害',
+        sumGood: '空气清新洁净，污染风险极低，非常适合各类户外运动与开窗通风。',
+        sumMod: '空气质量尚可，极少数对空气异常敏感的人群应注意减少剧烈户外活动。',
+        sumSens: '哮喘患者、儿童及老年人应缩短高强度户外运动时间。',
+        sumUnh: '所有人均可能出现呼吸道不适，请减少长时间户外体力活动。',
+        sumVeryUnh: '健康警报：所有人群健康风险显著增加，建议留在室内并开启空气净化器。',
+        sumHaz: '紧急空气污染警报！避免一切户外活动，外出务必佩戴 P2/N95 口罩。',
+        hcExercise: '户外运动',
+        hcVent: '居家通风',
+        hcSensitive: '敏感人群',
+        hcMask: '口罩建议',
+        hcUv: '紫外线防护',
+        stIdeal: '极佳条件',
+        stSafeMost: '适宜多数人',
+        stLimitInt: '控制强度',
+        stMoveIndoor: '转为室内',
+        stOpenWin: '开窗通风',
+        stKeepClosed: '关闭门窗',
+        stLowRisk: '低风险',
+        stMildCaution: '轻度注意',
+        stHighCaution: '高度注意',
+        stMaskAdv: '建议佩戴 N95',
+        stHighUv: '强紫外线',
+        stNoMask: '无需口罩',
+        dtExGood: '非常适合户外跑步、骑行和球类运动。',
+        dtExMod: '可以进行户外锻炼，敏感人群注意适时休息。',
+        dtExBad: '减少户外有氧运动，建议前往室内健身房。',
+        dtVentOpen: '打开窗户引入新鲜空气，降低室内二氧化碳浓度。',
+        dtVentClose: '关闭外窗，开启空调内循环或空气净化器。',
+        dtSensGood: '哮喘及过敏人群无需特殊防护。',
+        dtSensWarn: '户外散步时建议随身携带急救吸入器。',
+        dtMaskOn: '在车流密集街道请佩戴贴合的 N95/KN95 口罩。',
+        dtUvHigh: '户外活动请涂抹防晒霜并佩戴太阳镜。',
+        dtMaskOff: '环境空气清新，无需佩戴防护口罩。',
+        outfitGood: '清爽休闲装',
+        outfitGoodUv: '遮阳帽 & 墨镜',
+        gearGood: '免戴口罩 · 清新呼吸',
+        gearGoodUv: '紫外线防晒装备',
+        outfitMod: '轻薄开衫 & 围巾',
+        gearMod: '随身补水水壶',
+        outfitSens: '防风夹克 & 轻便口罩',
+        gearSens: '日常防护口罩',
+        outfitUnh: '机能冲锋衣 & KN95',
+        gearUnh: 'KN95/N95 + 护目镜',
+        outfitHaz: '全封闭防护风衣',
+        gearHaz: '专业呼吸器 + 护目镜',
+        quotes: {
+          good: [
+            '今天空气超级清新！穿轻便休闲装出门散步再合适不过啦。',
+            '几乎没有污染颗粒，快打开窗户给房间透透气吧！',
+            '空气质量满分，快去户外跑步或骑行享受阳光吧！'
+          ],
+          moderate: [
+            '空气质量还不错，我穿上了轻薄开衫并带上了水壶！',
+            '如果你容易过敏，长时间户外慢跑时记得适当休息。',
+            '加一件薄外套既舒适又能应对微风变化。'
+          ],
+          sensitive: [
+            '颗粒物浓度开始上升啦！我戴上了轻便口罩并穿了防风衣。',
+            '儿童和呼吸道敏感人群今天应适当缩短户外活动时间。',
+            '靠近马路的房间建议暂时关好窗户哦。'
+          ],
+          unhealthy: [
+            '空气有些浑浊！我已经换上连帽冲锋衣和 KN95 口罩啦。',
+            '为了保护肺部健康，今天不要在户外剧烈跑步，记得开净化器！',
+            '护目镜和 N95 口罩可以有效阻挡细颗粒物 PM2.5。'
+          ],
+          hazardous: [
+            '严重雾霾警报！全套呼吸防护面罩与密封外套已启动！',
+            '请留在室内紧闭门窗，等待空气质量好转。',
+            '紧急污染级别——没有佩戴密闭 N95 口罩千万不要出门！'
+          ]
+        },
+        pollutants: {
+          pm2_5: { name: '细颗粒物 (PM2.5)', desc: '直径小于 2.5 微米的可入肺颗粒物，主要来自机动车尾气与烟雾。', health: '可深入肺泡并进入血液循环，诱发哮喘及心血管负担。' },
+          pm10: { name: '可吸入颗粒物 (PM10)', desc: '直径小于 10 微米的扬尘、花粉、霉菌孢子及道路磨损颗粒。', health: '刺激眼睛、鼻腔和上呼吸道，加重季节性过敏与支气管炎。' },
+          ozone: { name: '臭氧 (O₃)', desc: '阳光照射下交通尾气发生光化学反应生成，常见于晴朗午后。', health: '户外运动时易引起胸闷、咳嗽、咽喉刺激及肺功能下降。' },
+          nitrogen_dioxide: { name: '二氧化氮 (NO₂)', desc: '主要由汽车发动机、燃气灶具和发电厂燃烧产生的反应性气体。', health: '引起气道黏膜炎症，增加呼吸道感染和哮喘发作风险。' },
+          sulphur_dioxide: { name: '二氧化硫 (SO₂)', desc: '船舶和工业设施燃烧含硫燃料时产生的刺激性气体。', health: '易导致哮喘患者支气管快速收缩和呼吸急促。' },
+          carbon_monoxide: { name: '一氧化碳 (CO)', desc: '燃料在发动机和取暖器中不完全燃烧产生的无色无味气体。', health: '降低血液向重要器官输送氧气的能力，高浓度易引起疲劳和头痛。' }
+        }
+      },
+
+      mn: {
+        langName: 'Монгол',
+        detectingGps: 'GPS байршил тогтоож байна...',
+        requestingCoords: 'Төхөөрөмжийн координат авч байна',
+        locatingViaGps: 'GPS-ээр байршил хайж байна...',
+        acquiringCoords: 'Утасны яг байршлыг тодорхойлж байна',
+        liveGpsPrefix: 'Шууд GPS',
+        liveSensorGrid: 'Орон нутгийн шууд агаар мэдрэгч',
+        updatedAt: '{time} шинэчлэгдсэн · Open-Meteo',
+        primaryPrefix: 'Гол бохирдуулагч',
+        scanning: 'Шалгаж байна...',
+        acquiringTelemetry: 'Таны GPS байршлын агаарын чанарын мэдээллийг татаж байна...',
+        offlineSample: 'Офлайн жишээ өгөгдөл харуулж байна',
+        retry: 'Дахин оролдох',
+        temp: 'Дулаан',
+        humidity: 'Чийгшил',
+        uvIndex: 'Хэт ягаан',
+        navLive: 'Шууд агаар',
+        navPollutants: 'Бохирдол',
+        navTrend: '24ц Төлөв',
+        navInstall: 'Апп суулгах',
+        healthTitle: 'Эрүүл мэндийн зөвлөмж',
+        whoGuidance: 'ДЭМБ / EPA заавар',
+        keyParticulates: 'Гол тоосонцор',
+        all6Pollutants: 'Бүх 6 бохирдуулагч',
+        pollutantsTitle: 'Бохирдуулагчийн задаргаа',
+        pollutantsSubtitle: 'Карт дээр дарж эрүүл мэндийн нөлөө болон ДЭМБ-ын хязгаарыг харна уу',
+        trendTitle: '24 цагийн агаарын урьдчилсан мэдээ',
+        trendSubtitle: 'Агаар хамгийн цэвэр үед гадаа дасгал хөдөлгөөнөө төлөвлөөрэй',
+        cleanestWindow: 'Дараагийн 24 цагийн хамгийн цэвэр үе',
+        calculatingBest: 'Тооцоолж байна...',
+        bestWindowFmt: '{time} орчим (Таамаг US AQI: {aqi})',
+        hourlyBreakdown: 'Цаг тутмын задаргаа',
+        now: 'Одоо',
+        installFreeBadge: '100% Үнэгүй · App Store шаардлагагүй',
+        installTitle: 'AeroSense суулгах',
+        installSubtitle: 'iPhone болон Android утсан дээр шууд ажиллана',
+        installBtn: 'Дэлгэц дээр апп суулгах',
+        iosHeader: 'iPhone & iPad (Safari)',
+        iosSteps: [
+          'iPhone дээрээ <strong>Safari</strong> хөтчөөр энэ холбоосыг нээнэ үү.',
+          'Дэлгэцийн доод хэсэгт байрлах <strong>Share (Хуваалцах)</strong> товчийг дарна уу.',
+          'Доош гүйлгээд <strong>"Add to Home Screen"</strong> дээр дарж <strong>Add</strong> сонгоно уу.'
+        ],
+        androidHeader: 'Android (Chrome)',
+        androidSteps: [
+          'Android утсан дээрээ <strong>Chrome</strong> хөтчөөр энэ холбоосыг нээнэ үү.',
+          'Баруун дээд буланд байрлах <strong>⋮ Цэс</strong> товчийг дарна уу.',
+          '<strong>"Install app"</strong> эсвэл <strong>"Add to Home screen"</strong> сонгоно уу.'
+        ],
+        pwaEngine: 'PWA ба Офлайн систем',
+        pwaReady: 'Идэвхтэй бэлэн',
+        selectLocation: 'Байршил сонгох',
+        useGpsBtn: 'Одоогийн утасны GPS байршлыг ашиглах',
+        searchPlaceholder: 'Хот эсвэл дүүрэг хайх (жнь: Улаанбаатар, Сидней)...',
+        popularCities: 'Түгээмэл хотууд',
+        globalResults: 'Хайлтын илэрц',
+        noCities: 'Тохирох хот олдсонгүй.',
+        currentConc: 'Одоогийн агууламж',
+        whoGuideline: 'ДЭМБ-ын 24ц хязгаар',
+        whatIsIt: 'Энэ юу вэ, хаанаас үүсдэг вэ?',
+        healthImpact: 'Эрүүл мэндэд үзүүлэх нөлөө',
+        gotIt: 'Ойлголоо',
+        optimal: 'Хэвийн',
+        nearWho: 'ДЭМБ-ын хязгаарт ойр',
+        aboveWho: 'ДЭМБ-ын хязгаараас давсан',
+        whoLimitShort: 'ДЭМБ хязгаар',
+        buddyTitle: 'Агаарын туслах хувцаслалт',
+        buddySubtitle: 'Дүр дээр дарж зөвлөгөө аваарай · Агаарт тааруулж хувцаслана',
+        buddyMina: 'Мина',
+        buddyLeo: 'Лео',
+        buddyTapHint: 'Зөвлөгөө авахын тулд дүр дээр дарна уу',
+        previewAirLevels: 'Агаарын түвшнээр хувцас турших',
+        tierLive: 'Шууд GPS',
+        tierGood: 'Сайн (25)',
+        tierMod: 'Дунд зэрэг (75)',
+        tierSens: 'Мэдрэг (125)',
+        tierUnh: 'Муу (175)',
+        tierHaz: 'Аюултай (240)',
+        catGood: 'Сайн',
+        catFair: 'Боломжийн',
+        catMod: 'Дунд зэрэг',
+        catSens: 'Мэдрэг бүлэгт муу',
+        catPoor: 'Муу',
+        catUnh: 'Эрүүл бус',
+        catVeryUnh: 'Маш муу',
+        catHaz: 'Аюултай',
+        sumGood: 'Агаар цэвэр, эрүүл байна. Гадаа зугаалах болон цонхоо нээж агаар оруулахад тохиромжтой.',
+        sumMod: 'Агаарын чанар боломжийн боловч хэт мэдрэг хүмүүс удаан хугацаагаар гадаа байхаас зайлсхий.',
+        sumSens: 'Астматай хүмүүс, хүүхэд, ахмад настнууд гадаах хүнд дасгалаа багасгах хэрэгтэй.',
+        sumUnh: 'Хүн бүрийн амьсгалын замд нөлөөлж болзошгүй. Гадаа удаан байхаас зайлсхий.',
+        sumVeryUnh: 'Эрүүл мэндийн анхааруулга: Дотор орчинд байж, агаар цэвэршүүлэгч ажиллуулна уу.',
+        sumHaz: 'Агаарын бохирдлын онцгой байдал! Гадаа гарахгүй байх, зайлшгүй бол N95/P2 маск зүүнэ үү.',
+        hcExercise: 'Гадаа дасгал',
+        hcVent: 'Агааржуулалт',
+        hcSensitive: 'Мэдрэг бүлэг',
+        hcMask: 'Маскны зөвлөгөө',
+        hcUv: 'Нарны хамгаалалт',
+        stIdeal: 'Маш тохиромжтой',
+        stSafeMost: 'Ихэнх хүнд аюулгүй',
+        stLimitInt: 'Ачааллаа багасга',
+        stMoveIndoor: 'Дотор дасгал хий',
+        stOpenWin: 'Цонхоо нээ',
+        stKeepClosed: 'Цонхоо хаа',
+        stLowRisk: 'Эрсдэл бага',
+        stMildCaution: 'Бага зэрэг анхаар',
+        stHighCaution: 'Өндөр анхаарал',
+        stMaskAdv: 'N95/P2 маск зүү',
+        stHighUv: 'Хэт ягаан туяа өндөр',
+        stNoMask: 'Маск шаардлагагүй',
+        dtExGood: 'Гадаа гүйх, дугуй унахад хамгийн тохиромжтой.',
+        dtExMod: 'Гадаа дасгал хийж болно, мэдрэг бол амраарай.',
+        dtExBad: 'Гадаа хүнд дасгал хийхээс зайлсхийж зааланд хичээллэ.',
+        dtVentOpen: 'Цонхоо нээж цэвэр агаар оруулан өрөөний CO₂-ийг бууруул.',
+        dtVentClose: 'Цонхоо хааж агаар цэвэршүүлэгчээ ажиллуулна уу.',
+        dtSensGood: 'Астма, харшилтай хүмүүст тусгай анхааруулга шаардлагагүй.',
+        dtSensWarn: 'Гадуур алхахдаа амьсгалын цацлагаа биедээ авч яваарай.',
+        dtMaskOn: 'Хөл хөдөлгөөн ихтэй гудамжинд N95/P2 маск заавал зүүнэ үү.',
+        dtUvHigh: 'Гадаа гарахдаа нарны тос түрхэж, нарны шил зүүгээрэй.',
+        dtMaskOff: 'Агаар цэвэр тул хамгаалалтын маск шаардлагагүй.',
+        outfitGood: 'Хөнгөн чөлөөт хувцас',
+        outfitGoodUv: 'Нарны малгай & Шил',
+        gearGood: 'Маскгүй · Цэвэр агаар',
+        gearGoodUv: 'Нарны хамгаалалт',
+        outfitMod: 'Нимгэн цамц & Ороолт',
+        gearMod: 'Усны сав',
+        outfitSens: 'Салхины хүрэм & Маск',
+        gearSens: 'Энгийн амны хаалт',
+        outfitUnh: 'Юүдэнтэй куртка & N95',
+        gearUnh: 'KN95/N95 + Нүдний шил',
+        outfitHaz: 'Бүрэн хамгаалалтын цув',
+        gearHaz: 'Амьсгалын аппарат + Нүдний шил',
+        quotes: {
+          good: [
+            'Өнөөдөр агаар үнэхээр цэвэрхэн байна! Хөнгөн хувцаслаад гадаа алхахад гоё шүү.',
+            'Утаа тоосонцоргүй цэнгэг байна, цонхоо нээж өрөөгөө агааржуулаарай!',
+            'Гадаа гүйх, дугуй унахад хамгийн тохиромжтой өдөр!'
+          ],
+          moderate: [
+            'Агаар боломжийн байгаа тул нимгэн цамц өмсөж, ус авч гарлаа!',
+            'Хэрэв харшилтай бол гадаа удаан гүйхдээ түр амарч байгаарай.',
+            'Нимгэн давхар хувцас сэрүүн салхинаас хамгаална.'
+          ],
+          sensitive: [
+            'Нарийн тоосонцор нэмэгдэж байна! Би амны хаалт, салхины хүрэм өмслөө.',
+            'Хүүхэд болон мэдрэг хүмүүс гадаах дасгалаа богиносгоорой.',
+            'Төв зам дагуух цонхнуудаа хаалттай байлгах нь дээр.'
+          ],
+          unhealthy: [
+            'Агаар бүрхэг бохирдолтой байна! Юүдэнтэй куртка болон N95 маск зүүлээ.',
+            'Уушгиа хамгаалахын тулд гадаа гүйхгүй байж, агаар шүүгчээ асаагаарай!',
+            'Хамгаалалтын шил болон N95 маск PM2.5 тоосонцрыг сайн шүүнэ.'
+          ],
+          hazardous: [
+            'Аюултай утааны түгшүүр! Бүрэн хамгаалалтын хувцас, нүдний шил өмслөө!',
+            'Агаар цэвэрштэл цонх, хаалгаа сайтар хаагаад гэртээ байгаарай.',
+            'Онцгой бохирдолтой үед битүүмжлэл сайтай N95/P2 маскгүй гадагш бүү гар!'
+          ]
+        },
+        pollutants: {
+          pm2_5: { name: 'Нарийн тоосонцор (PM2.5)', desc: '2.5 микроноос жижиг автомашины утаа, шаталтаас үүсэх нарийн ширхэгт тоосонцор.', health: 'Уушгины гүн болон цусанд нэвтэрч астма, зүрх судасны өвчнийг сэдрээдэг.' },
+          pm10: { name: 'Том ширхэгт тоосонцор (PM10)', desc: '10 микроноос жижиг замын тоос, цэцгийн тоос, хөгцний спор.', health: 'Нүд, хамар, амьсгалын дээд замыг цочроож харшил сэдрээнэ.' },
+          ozone: { name: 'Газрын түвшний озон (O₃)', desc: 'Нарны гэрэл автомашины утаатай урвалд орж үдээс хойш үүсдэг хий.', health: 'Гадаа дасгал хийх үед цээж давчдах, ханиалгах, уушгины багтаамж буурахад хүргэнэ.' },
+          nitrogen_dioxide: { name: 'Азотын давхар исэл (NO₂)', desc: 'Автомашин, хийн зуух, цахилгаан станцын шаталтаас ялгардаг хий.', health: 'Амьсгалын замын салстыг үрэвсүүлж халдвар авах эрсдэлийг нэмэгдүүлнэ.' },
+          sulphur_dioxide: { name: 'Хүхрийн давхар исэл (SO₂)', desc: 'Хүхэр агуулсан түлш шатаахад үүсдэг хурц үнэртэй хий.', health: 'Астматай хүмүүст амьсгал боогдох, гуурсан хоолой агших шалтгаан болдог.' },
+          carbon_monoxide: { name: 'Нүүрстөрөгчийн дутуу исэл (CO)', desc: 'Түлш дутуу шатахад үүсдэг өнгөгүй, үнэргүй хорт хий.', health: 'Цусны хүчилтөрөгч зөөвөрлөх чадварыг бууруулж ядрах, толгой өвдөхөд хүргэнэ.' }
+        }
+      },
+
+      ja: {
+        langName: '日本語',
+        detectingGps: 'GPS位置を取得中...',
+        requestingCoords: 'デバイスの座標をリクエスト中',
+        locatingViaGps: 'GPSで現在地を検索中...',
+        acquiringCoords: '高精度な位置情報を取得しています',
+        liveGpsPrefix: 'ライブ GPS',
+        liveSensorGrid: 'リアルタイム地域大気センサー',
+        updatedAt: '{time} 更新 · Open-Meteo ライブ',
+        primaryPrefix: '主な汚染物質',
+        scanning: 'スキャン中...',
+        acquiringTelemetry: '現在のGPS座標のリアルタイム大気データを取得しています...',
+        offlineSample: 'オフラインのサンプルデータを表示しています',
+        retry: '再試行',
+        temp: '気温',
+        humidity: '湿度',
+        uvIndex: 'UV指数',
+        navLive: 'ライブ空気',
+        navPollutants: '汚染物質',
+        navTrend: '24時間予報',
+        navInstall: 'アプリ導入',
+        healthTitle: '健康アドバイス',
+        whoGuidance: 'WHO / EPA 基準',
+        keyParticulates: '主な粒子状物質',
+        all6Pollutants: '全6種類の汚染物質',
+        pollutantsTitle: '汚染物質の詳細分析',
+        pollutantsSubtitle: 'カードをタップすると健康への影響とWHO基準値を確認できます',
+        trendTitle: '24時間空気質予報',
+        trendSubtitle: '空気が最もきれいな時間帯に屋外運動を計画しましょう',
+        cleanestWindow: '今後24時間で最もきれいな時間帯',
+        calculatingBest: '最適な時間を計算中...',
+        bestWindowFmt: '{time}頃（予想 US AQI: {aqi}）',
+        hourlyBreakdown: '1時間ごとの詳細予報',
+        now: '現在',
+        installFreeBadge: '100% 無料 · ストア不要',
+        installTitle: 'AeroSense をインストール',
+        installSubtitle: 'iPhone と Android にネイティブ対応',
+        installBtn: 'ホーム画面にインストール',
+        iosHeader: 'iPhone & iPad (Safari)',
+        iosSteps: [
+          'iPhoneの <strong>Safari</strong> でこのリンクを開きます。',
+          '画面下部の <strong>共有</strong> アイコンをタップします。',
+          '下にスクロールして <strong>「ホーム画面に追加」</strong> を選び、<strong>追加</strong> をタップします。'
+        ],
+        androidHeader: 'Android (Chrome)',
+        androidSteps: [
+          'Androidスマホの <strong>Chrome</strong> でこのリンクを開きます。',
+          '右上の <strong>⋮ メニュー</strong> ボタンをタップします。',
+          '<strong>「アプリをインストール」</strong> または <strong>「ホーム画面に追加」</strong> をタップします。'
+        ],
+        pwaEngine: 'PWA マニフェスト & オフライン機能',
+        pwaReady: '有効・準備完了',
+        selectLocation: '場所を選択',
+        useGpsBtn: '現在のデバイスのGPS位置を使用',
+        searchPlaceholder: '都市や地域を検索（例：東京、大阪、シドニー）...',
+        popularCities: '人気の都市・エリア',
+        globalResults: '検索結果',
+        noCities: '一致する都市が見つかりませんでした。',
+        currentConc: '現在の濃度',
+        whoGuideline: 'WHO 24時間指針値',
+        whatIsIt: '特徴と主な発生源',
+        healthImpact: '健康への影響',
+        gotIt: '閉じる',
+        optimal: '良好',
+        nearWho: 'WHO基準値付近',
+        aboveWho: 'WHO基準値超過',
+        whoLimitShort: 'WHO基準',
+        buddyTitle: 'エアバディ服装アドバイザー',
+        buddySubtitle: 'キャラをタップでヒント · 空気質に合わせて自動着替え',
+        buddyMina: 'ミナ',
+        buddyLeo: 'レオ',
+        buddyTapHint: 'キャラクターをタップしてアドバイスを見る',
+        previewAirLevels: '空気質レベル別の服装プレビュー',
+        tierLive: 'ライブ GPS',
+        tierGood: '良好 (25)',
+        tierMod: '普通 (75)',
+        tierSens: '敏感注意 (125)',
+        tierUnh: '不健康 (175)',
+        tierHaz: '危険 (240)',
+        catGood: '良好',
+        catFair: 'まずまず',
+        catMod: '普通',
+        catSens: '敏感な方に注意',
+        catPoor: '悪い',
+        catUnh: '不健康',
+        catVeryUnh: '非常に不健康',
+        catHaz: '危険',
+        sumGood: '空気は澄んでいて健康的です。屋外での運動や窓を開けての換気に最適です。',
+        sumMod: '概ね良好な空気質ですが、特に敏感な方は長時間の激しい運動にご注意ください。',
+        sumSens: '喘息の方、お子様、高齢者は激しい屋外運動の時間を短縮してください。',
+        sumUnh: 'すべての人に呼吸器への影響が出る可能性があります。長時間の外出は控えましょう。',
+        sumVeryUnh: '健康警報：すべての人にリスクがあります。室内で空気清浄機を使用してください。',
+        sumHaz: '緊急大気汚染警報！屋外活動を控え、外出時は必ずP2/N95マスクを着用してください。',
+        hcExercise: '屋外運動',
+        hcVent: '室内換気',
+        hcSensitive: '敏感な方へ',
+        hcMask: 'マスク目安',
+        hcUv: '紫外線対策',
+        stIdeal: '最適な環境',
+        stSafeMost: '概ね安全',
+        stLimitInt: '強度を抑える',
+        stMoveIndoor: '室内運動を推奨',
+        stOpenWin: '窓を開けて換気',
+        stKeepClosed: '窓を閉める',
+        stLowRisk: '低リスク',
+        stMildCaution: 'やや注意',
+        stHighCaution: '高度な注意',
+        stMaskAdv: 'N95/P2 推奨',
+        stHighUv: '強い紫外線',
+        stNoMask: 'マスク不要',
+        dtExGood: 'ランニングやサイクリングなど屋外スポーツに最適です。',
+        dtExMod: '屋外運動は可能ですが、敏感な方は適度に休憩をとってください。',
+        dtExBad: '屋外での激しい有酸素運動は控え、室内ジムを利用しましょう。',
+        dtVentOpen: '窓を開けて新鮮な外気を取り入れ、室内のCO₂を下げましょう。',
+        dtVentClose: '窓を閉め、エアコンの内気循環や空気清浄機を稼働させましょう。',
+        dtSensGood: '喘息やアレルギーの方も特別な対策は不要です。',
+        dtSensWarn: '外出時は念のため吸入薬などを携帯すると安心です。',
+        dtMaskOn: '交通量の多い通りでは密着性の高いN95マスクを着用してください。',
+        dtUvHigh: '外出時は日焼け止めとサングラスで紫外線対策をしましょう。',
+        dtMaskOff: 'きれいな空気のため、マスクなしで快適に過ごせます。',
+        outfitGood: '爽やかカジュアル',
+        outfitGoodUv: '日よけ帽子＆サングラス',
+        gearGood: 'マスク不要 · 澄んだ空気',
+        gearGoodUv: 'UV紫外線対策',
+        outfitMod: '薄手カーディガン＆スカーフ',
+        gearMod: '水分補給ボトル',
+        outfitSens: 'ウインドブレーカー＆マスク',
+        gearSens: '日常用マスク着用',
+        outfitUnh: 'フードパーカー＆N95マスク',
+        gearUnh: 'KN95/N95 + 保護メガネ',
+        outfitHaz: '完全防護コート＆ゴーグル',
+        gearHaz: '防塵マスク + ゴーグル',
+        quotes: {
+          good: [
+            '今日は空気がとってもきれい！軽やかな服装でお散歩に出かけよう。',
+            'PM2.5も少なくて爽やか！窓を開けてお部屋の空気を入れ替えよう！',
+            '最高の空気コンディション！ランニングやサイクリング日和だよ。'
+          ],
+          moderate: [
+            '空気はまずまずなので、薄手のカーディガンと水筒を用意したよ！',
+            'アレルギーがある人は、長時間のジョギング中にこまめに休憩してね。',
+            '軽い羽織りものがあると気温差や風にも対応できて快適だよ。'
+          ],
+          sensitive: [
+            '微粒子が少し増えてきたよ！マスクとウインドブレーカーを着用したよ。',
+            'お子様や呼吸器が敏感な方は、屋外での運動時間を短めにしよう。',
+            '交通量の多い道路沿いでは窓を閉めておくのがおすすめだよ。'
+          ],
+          unhealthy: [
+            '空気が霞んでいるよ！フード付きパーカーとN95マスクに切り替えたよ。',
+            '肺を守るため、屋外での激しい運動は避けて空気清浄機をつけよう！',
+            '保護メガネとN95マスクが微細なPM2.5粒子をしっかりブロックするよ。'
+          ],
+          hazardous: [
+            '危険レベルの大気汚染！完全防護コートとゴーグル、防塵マスクを装着！',
+            '空気がきれいになるまで窓を閉めて室内で安全に過ごそう。',
+            '緊急レベルです——密着型N95マスクなしでの外出は避けてね！'
+          ]
+        },
+        pollutants: {
+          pm2_5: { name: '微小粒子状物質 (PM2.5)', desc: '自動車の排ガスや煙から発生する直径2.5µm以下の超微粒子。', health: '肺の奥や血液に入り込み、喘息や循環器系への負担を引き起こします。' },
+          pm10: { name: '浮遊粒子状物質 (PM10)', desc: '直径10µm以下の砂ぼこり、花粉、カビ胞子、道路粉じんなど。', health: '目・鼻・のどを刺激し、季節性アレルギーや気管支炎を悪化させます。' },
+          ozone: { name: '光化学オキシダント (O₃)', desc: '強い太陽光と自動車排ガスが反応して晴れた午後に発生します。', health: '屋外運動時に胸の圧迫感、咳、のどの痛み、肺機能低下を引き起こします。' },
+          nitrogen_dioxide: { name: '二酸化窒素 (NO₂)', desc: '自動車エンジンやガスコンロ、発電所などの燃焼で発生するガス。', health: '気道の粘膜に炎症を起こし、呼吸器感染症のリスクを高めます。' },
+          sulphur_dioxide: { name: '二酸化硫黄 (SO₂)', desc: '船舶や工場などで硫黄を含む燃料を燃焼する際に発生します。', health: '喘息の方に急な気管支収縮や息切れを引き起こすことがあります。' },
+          carbon_monoxide: { name: '一酸化炭素 (CO)', desc: 'エンジンや暖房器具の不完全燃焼で発生する無色・無臭のガス。', health: '体内の酸素運搬能力を低下させ、疲労感や頭痛の原因になります。' }
+        }
+      }
+    };
+
+    // =========================================================================
+    // 2. DYNAMIC PWA MANIFEST & SERVICE WORKER SETUP (SINGLE-FILE SUPPORT)
+    // =========================================================================
+    let deferredInstallPrompt = null;
+// ... existing code ... -->
+    let state = {
+      lat: -33.8688,
+      lon: 151.2093,
+      locationName: 'Sydney CBD',
+      locationRegion: 'New South Wales, Australia',
+      isGps: false,
+      standard: 'us_aqi', // 'us_aqi' or 'european_aqi'
+      trendMetric: 'us_aqi',
+      lang: 'en',
+      buddyChar: 'mina', // 'mina' | 'leo' | 'both'
+      simulatedTier: 'live', // 'live' | 'good' | 'moderate' | 'sensitive' | 'unhealthy' | 'hazardous'
+      quoteIndex: 0,
+      currentAir: null,
+      currentWeather: null,
+      hourly: null
+    };
+
+    function t(key, vars = {}) {
+      const pack = TRANSLATIONS[state.lang] || TRANSLATIONS.en;
+      let str = pack[key] !== undefined ? pack[key] : (TRANSLATIONS.en[key] ?? key);
+      if (typeof str === 'string') {
+        Object.keys(vars).forEach(k => {
+          str = str.replace(`{${k}}`, vars[k]);
+        });
+      }
+      return str;
+    }
+
+    function setLanguage(langCode) {
+      if (!TRANSLATIONS[langCode]) return;
+      state.lang = langCode;
+      applyStaticTranslations();
+      renderAllViews();
+      showToast(`${TRANSLATIONS[langCode].langName}`);
+    }
+
+    function applyStaticTranslations() {
+      const setTxt = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+      };
+
+      setTxt('offlineNoticeText', t('offlineSample'));
+      setTxt('retryBtnText', t('retry'));
+      setTxt('labelWeatherTemp', t('temp'));
+      setTxt('labelWeatherHumidity', t('humidity'));
+      setTxt('labelWeatherUv', t('uvIndex'));
+
+      setTxt('navLabelLive', t('navLive'));
+      setTxt('navLabelPollutants', t('navPollutants'));
+      setTxt('navLabelTrend', t('navTrend'));
+      setTxt('navLabelInstall', t('navInstall'));
+
+      setTxt('healthSectionTitle', t('healthTitle'));
+      setTxt('healthWhoBadge', t('whoGuidance'));
+      setTxt('keyParticulatesTitle', t('keyParticulates'));
+      setTxt('allPollutantsLink', t('all6Pollutants'));
+
+      setTxt('pollutantsViewTitle', t('pollutantsTitle'));
+      setTxt('pollutantsViewSubtitle', t('pollutantsSubtitle'));
+
+      setTxt('trendViewTitle', t('trendTitle'));
+      setTxt('trendViewSubtitle', t('trendSubtitle'));
+      setTxt('cleanestWindowLabel', t('cleanestWindow'));
+      setTxt('hourlyBreakdownTitle', t('hourlyBreakdown'));
+
+      setTxt('installFreeBadge', t('installFreeBadge'));
+      setTxt('installViewTitle', t('installTitle'));
+      setTxt('installViewSubtitle', t('installSubtitle'));
+      setTxt('nativeInstallBtnText', t('installBtn'));
+      setTxt('iosGuideHeader', t('iosHeader'));
+      setTxt('androidGuideHeader', t('androidHeader'));
+      setTxt('pwaEngineLabel', t('pwaEngine'));
+      setTxt('pwaStatusBadge', t('pwaReady'));
+
+      setTxt('modalLocationTitle', t('selectLocation'));
+      setTxt('useGpsBtnText', t('useGpsBtn'));
+      const searchInput = document.getElementById('citySearchInput');
+      if (searchInput) searchInput.placeholder = t('searchPlaceholder');
+
+      setTxt('modalCurrentConcLabel', t('currentConc'));
+      setTxt('modalWhoGuidelineLabel', t('whoGuideline'));
+      setTxt('modalWhatIsTitle', t('whatIsIt'));
+      setTxt('modalHealthImpactTitle', t('healthImpact'));
+      setTxt('modalGotItBtn', t('gotIt'));
+
+      // Air Buddy Static Labels
+      const buddyTitleEl = document.getElementById('airBuddySectionTitle');
+      if (buddyTitleEl) {
+        buddyTitleEl.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-sky-400"></i><span>${t('buddyTitle')}</span>`;
+      }
+      setTxt('airBuddySubtitle', t('buddySubtitle'));
+      setTxt('buddy-btn-mina', `👧 ${t('buddyMina')}`);
+      setTxt('buddy-btn-leo', `👦 ${t('buddyLeo')}`);
+      const tapHintEl = document.getElementById('buddyTapHint');
+      if (tapHintEl) {
+        tapHintEl.innerHTML = `<i data-lucide="hand" class="w-3 h-3"></i><span>${t('buddyTapHint')}</span>`;
+      }
+      setTxt('previewBarLabel', t('previewAirLevels'));
+      setTxt('sim-btn-live', t('tierLive'));
+      setTxt('sim-btn-good', t('tierGood'));
+      setTxt('sim-btn-moderate', t('tierMod'));
+      setTxt('sim-btn-sensitive', t('tierSens'));
+      setTxt('sim-btn-unhealthy', t('tierUnh'));
+      setTxt('sim-btn-hazardous', t('tierHaz'));
+
+      // Render translated PWA Install Steps
+      const iosSteps = t('iosSteps');
+      const iosList = document.getElementById('iosGuideSteps');
+      if (iosList && Array.isArray(iosSteps)) {
+        iosList.innerHTML = iosSteps.map((step, i) => `
+          <li class="flex items-start gap-2.5">
+            <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-300 font-bold flex items-center justify-center shrink-0 text-[11px]">${i + 1}</span>
+            <span>${step}</span>
+          </li>
+        `).join('');
+      }
+
+      const androidSteps = t('androidSteps');
+      const androidList = document.getElementById('androidGuideSteps');
+      if (androidList && Array.isArray(androidSteps)) {
+        androidList.innerHTML = androidSteps.map((step, i) => `
+          <li class="flex items-start gap-2.5">
+            <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center shrink-0 text-[11px]">${i + 1}</span>
+            <span>${step}</span>
+          </li>
+        `).join('');
+      }
+
+      updateLocationHeader();
+    }
+
+    // =========================================================================
+    // 3. AQI SEVERITY CLASSIFICATION & HEALTH ENGINE (LOCALIZED)
+    // =========================================================================
+    function getAqiCategory(aqi, standard = 'us_aqi') {
+      if (standard === 'european_aqi') {
+        if (aqi <= 20) return { tier: 'good', label: t('catGood'), color: '#10B981', pillBg: 'rgba(16,185,129,0.2)', summary: t('sumGood') };
+        if (aqi <= 40) return { tier: 'good', label: t('catFair'), color: '#84CC16', pillBg: 'rgba(132,204,22,0.2)', summary: t('sumGood') };
+        if (aqi <= 60) return { tier: 'moderate', label: t('catMod'), color: '#F59E0B', pillBg: 'rgba(245,158,11,0.2)', summary: t('sumMod') };
+        if (aqi <= 80) return { tier: 'sensitive', label: t('catPoor'), color: '#F97316', pillBg: 'rgba(249,115,22,0.2)', summary: t('sumSens') };
+        if (aqi <= 100) return { tier: 'unhealthy', label: t('catVeryUnh'), color: '#EF4444', pillBg: 'rgba(239,68,68,0.2)', summary: t('sumVeryUnh') };
+        return { tier: 'hazardous', label: t('catHaz'), color: '#A855F7', pillBg: 'rgba(168,85,247,0.2)', summary: t('sumHaz') };
+      }
+
+      // US EPA AQI Standard
+      if (aqi <= 50) return { tier: 'good', label: t('catGood'), color: '#10B981', pillBg: 'rgba(16,185,129,0.2)', summary: t('sumGood') };
+      if (aqi <= 100) return { tier: 'moderate', label: t('catMod'), color: '#F59E0B', pillBg: 'rgba(245,158,11,0.2)', summary: t('sumMod') };
+      if (aqi <= 150) return { tier: 'sensitive', label: t('catSens'), color: '#F97316', pillBg: 'rgba(249,115,22,0.2)', summary: t('sumSens') };
+      if (aqi <= 200) return { tier: 'unhealthy', label: t('catUnh'), color: '#EF4444', pillBg: 'rgba(239,68,68,0.2)', summary: t('sumUnh') };
+      if (aqi <= 300) return { tier: 'hazardous', label: t('catVeryUnh'), color: '#A855F7', pillBg: 'rgba(168,85,247,0.2)', summary: t('sumVeryUnh') };
+      return { tier: 'hazardous', label: t('catHaz'), color: '#E11D48', pillBg: 'rgba(225,29,72,0.25)', summary: t('sumHaz') };
+    }
+
+    function generateHealthAdviceCards(usAqi, uvIndex) {
+      const isGood = usAqi <= 50;
+      const isMod = usAqi > 50 && usAqi <= 100;
+      const isSens = usAqi > 100 && usAqi <= 150;
+
+      return [
+        {
+          icon: 'bike',
+          iconColor: isGood ? 'text-emerald-400' : isMod ? 'text-amber-400' : 'text-rose-400',
+          title: t('hcExercise'),
+          status: isGood ? t('stIdeal') : isMod ? t('stSafeMost') : isSens ? t('stLimitInt') : t('stMoveIndoor'),
+          detail: isGood ? t('dtExGood') : isMod ? t('dtExMod') : t('dtExBad')
+        },
+        {
+          icon: 'wind',
+          iconColor: usAqi <= 75 ? 'text-sky-400' : 'text-amber-400',
+          title: t('hcVent'),
+          status: usAqi <= 75 ? t('stOpenWin') : t('stKeepClosed'),
+          detail: usAqi <= 75 ? t('dtVentOpen') : t('dtVentClose')
+        },
+        {
+          icon: 'heart-handshake',
+          iconColor: isGood ? 'text-teal-400' : 'text-orange-400',
+          title: t('hcSensitive'),
+          status: isGood ? t('stLowRisk') : isMod ? t('stMildCaution') : t('stHighCaution'),
+          detail: isGood ? t('dtSensGood') : t('dtSensWarn')
+        },
+        {
+          icon: 'shield-check',
+          iconColor: usAqi > 120 ? 'text-rose-400' : uvIndex >= 6 ? 'text-yellow-400' : 'text-indigo-400',
+          title: usAqi > 120 ? t('hcMask') : t('hcUv'),
+          status: usAqi > 120 ? t('stMaskAdv') : uvIndex >= 6 ? `${t('stHighUv')} (${uvIndex})` : t('stNoMask'),
+          detail: usAqi > 120 ? t('dtMaskOn') : uvIndex >= 6 ? t('dtUvHigh') : t('dtMaskOff')
+        }
+      ];
+    }
+
+    // =========================================================================
+    // 4. INTERACTIVE AIR BUDDY CHARACTERS (MINA & LEO) DYNAMIC SVG ENGINE
+    // =========================================================================
+    function setBuddyCharacter(charType) {
+      state.buddyChar = charType;
+      ['mina', 'leo', 'both'].forEach(c => {
+        const btn = document.getElementById(`buddy-btn-${c}`);
+        if (!btn) return;
+        if (c === charType) {
+          btn.className = c === 'mina'
+            ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-pink-500/25 text-pink-200 border border-pink-400/30 transition'
+            : c === 'leo'
+            ? 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-500/25 text-sky-200 border border-sky-400/30 transition'
+            : 'px-2 py-1 rounded-lg text-[11px] font-bold bg-purple-500/25 text-purple-200 border border-purple-400/30 transition';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-white transition';
+        }
+      });
+      renderAirBuddy();
+    }
+
+    function setSimulatedTier(tier) {
+      state.simulatedTier = tier;
+      document.querySelectorAll('.sim-tier-btn').forEach(btn => {
+        btn.className = 'sim-tier-btn px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 text-slate-300 hover:bg-white/10 whitespace-nowrap transition';
+      });
+      const active = document.getElementById(`sim-btn-${tier}`);
+      if (active) {
+        active.className = 'sim-tier-btn px-2.5 py-1 rounded-lg text-[10px] font-bold bg-sky-500 text-slate-950 whitespace-nowrap transition';
+      }
+      renderAirBuddy();
+    }
+
+    function interactWithBuddy() {
+      state.quoteIndex += 1;
+      const stage = document.getElementById('buddyStageContainer');
+      if (stage) {
+        stage.classList.remove('buddy-tap');
+        void stage.offsetWidth; // trigger reflow
+        stage.classList.add('buddy-tap');
+      }
+      renderAirBuddy();
+    }
+
+    function getEffectiveBuddyTier() {
+      if (state.simulatedTier !== 'live') {
+        return state.simulatedTier;
+      }
+      const usAqi = Math.round(state.currentAir?.us_aqi ?? 30);
+      if (usAqi <= 50) return 'good';
+      if (usAqi <= 100) return 'moderate';
+      if (usAqi <= 150) return 'sensitive';
+      if (usAqi <= 200) return 'unhealthy';
+      return 'hazardous';
+    }
+
+    function buildCharacterSvg(who, tier, isHighUv) {
+      const isGirl = who === 'mina';
+
+      // Outfit color palette & gear by air quality tier
+      const outfitConfigs = {
+        good: {
+          bgGlow: '#10B981',
+          topFill: isGirl ? '#F472B6' : '#38BDF8',
+          topAccent: isGirl ? '#FBCFE8' : '#BAE6FD',
+          bottomFill: isGirl ? '#FB7185' : '#1E3A8A',
+          hoodUp: false,
+          maskType: 'none',
+          goggles: false,
+          sunGear: isHighUv,
+          accessory: 'sparkle',
+          mouth: 'smile'
+        },
+        moderate: {
+          bgGlow: '#F59E0B',
+          topFill: isGirl ? '#FBBF24' : '#34D399',
+          topAccent: isGirl ? '#FEF3C7' : '#A7F3D0',
+          bottomFill: '#334155',
+          hoodUp: false,
+          maskType: 'none',
+          goggles: false,
+          sunGear: false,
+          accessory: 'scarf_bottle',
+          mouth: 'calm'
+        },
+        sensitive: {
+          bgGlow: '#F97316',
+          topFill: isGirl ? '#FB923C' : '#60A5FA',
+          topAccent: '#FFEDD5',
+          bottomFill: '#1E293B',
+          hoodUp: false,
+          maskType: 'cloth',
+          goggles: false,
+          sunGear: false,
+          accessory: 'windbreaker',
+          mouth: 'hidden'
+        },
+        unhealthy: {
+          bgGlow: '#EF4444',
+          topFill: isGirl ? '#E11D48' : '#2563EB',
+          topAccent: '#FECDD3',
+          bottomFill: '#0F172A',
+          hoodUp: true,
+          maskType: 'n95',
+          goggles: true,
+          sunGear: false,
+          accessory: 'smog',
+          mouth: 'hidden'
+        },
+        hazardous: {
+          bgGlow: '#A855F7',
+          topFill: '#EAB308',
+          topAccent: '#1E293B',
+          bottomFill: '#0F172A',
+          hoodUp: true,
+          maskType: 'respirator',
+          goggles: true,
+          sunGear: false,
+          accessory: 'shield',
+          mouth: 'hidden'
+        }
+      };
+
+      const cfg = outfitConfigs[tier] || outfitConfigs.good;
+      const hairColor = isGirl ? '#3B2322' : '#1E293B';
+      const skinColor = '#FDE2CE';
+      const blushColor = '#FDA4AF';
+
+      // Atmospheric background particles
+      let particlesSvg = '';
+      if (tier === 'good') {
+        particlesSvg = `
+          <g class="particle-drift">
+            <circle cx="22" cy="28" r="3" fill="#34D399" />
+            <path d="M96 26 Q102 20 106 26 Q102 32 96 26 Z" fill="#10B981" />
+            <circle cx="100" cy="76" r="2.5" fill="#FDE047" />
+          </g>`;
+      } else if (tier === 'moderate') {
+        particlesSvg = `
+          <g class="particle-drift" opacity="0.75">
+            <path d="M16 36 Q26 32 34 36" stroke="#38BDF8" stroke-width="2" fill="none" stroke-linecap="round" />
+            <path d="M88 30 Q98 26 106 30" stroke="#FBBF24" stroke-width="2" fill="none" stroke-linecap="round" />
+          </g>`;
+      } else if (tier === 'sensitive' || tier === 'unhealthy') {
+        particlesSvg = `
+          <g class="particle-drift" opacity="0.8">
+            <circle cx="20" cy="30" r="5" fill="#94A3B8" opacity="0.45" />
+            <circle cx="102" cy="34" r="6" fill="#94A3B8" opacity="0.4" />
+            <circle cx="24" cy="75" r="4" fill="#F97316" opacity="0.5" />
+          </g>`;
+      } else {
+        particlesSvg = `
+          <g class="particle-drift">
+            <circle cx="60" cy="68" r="52" fill="none" stroke="#A855F7" stroke-width="2" stroke-dasharray="6 5" opacity="0.65" />
+            <circle cx="20" cy="26" r="5" fill="#A855F7" opacity="0.55" />
+            <circle cx="102" cy="28" r="5" fill="#EF4444" opacity="0.55" />
+          </g>`;
+      }
+
+      // Back hair (for Mina) or outer hood
+      const backHair = isGirl
+        ? `<path d="M35 50 C28 74, 30 94, 42 98 L78 98 C90 94, 92 74, 85 50 Z" fill="${hairColor}" />`
+        : '';
+
+      const outerHood = cfg.hoodUp
+        ? `<path d="M29 58 C29 24, 91 24, 91 58 L95 88 L25 88 Z" fill="${cfg.topFill}" stroke="${cfg.topAccent}" stroke-width="1.5" />`
+        : '';
+
+      // Torso & Outfit
+      let torsoSvg = '';
+      if (tier === 'good') {
+        torsoSvg = isGirl
+          ? `<!-- Cute Sundress -->
+             <path d="M44 76 L76 76 L84 114 L36 114 Z" fill="${cfg.topFill}" rx="6" />
+             <path d="M47 76 L47 84 M73 76 L73 84" stroke="${cfg.topAccent}" stroke-width="3" stroke-linecap="round" />
+             <circle cx="60" cy="92" r="2.5" fill="#FFFFFF" opacity="0.8" />`
+          : `<!-- Breezy T-Shirt & Shorts -->
+             <path d="M43 76 L77 76 L80 102 L40 102 Z" fill="${cfg.topFill}" />
+             <rect x="42" y="101" width="36" height="13" rx="3" fill="${cfg.bottomFill}" />
+             <path d="M45 86 L75 86" stroke="${cfg.topAccent}" stroke-width="3" />`;
+      } else if (tier === 'moderate') {
+        torsoSvg = `
+          <!-- Cardigan + Scarf -->
+          <path d="M41 76 L79 76 L83 114 L37 114 Z" fill="${cfg.topFill}" />
+          <rect x="54" y="76" width="12" height="38" fill="#FFFFFF" opacity="0.85" />
+          <path d="M45 75 Q60 83 75 75" stroke="#F43F5E" stroke-width="5" stroke-linecap="round" fill="none" />
+          <rect x="64" y="77" width="5" height="16" rx="2" fill="#F43F5E" />
+          <!-- Mini Water Bottle -->
+          <rect x="82" y="88" width="8" height="15" rx="2.5" fill="#38BDF8" stroke="#E0F2FE" stroke-width="1" />
+        `;
+      } else if (tier === 'sensitive') {
+        torsoSvg = `
+          <!-- Windbreaker Hoodie -->
+          <path d="M40 76 L80 76 L84 114 L36 114 Z" fill="${cfg.topFill}" />
+          <line x1="60" y1="76" x2="60" y2="114" stroke="#FFFFFF" stroke-width="1.8" opacity="0.8" />
+          <path d="M46 76 Q60 83 74 76" stroke="${cfg.topAccent}" stroke-width="3.5" fill="none" />
+        `;
+      } else if (tier === 'unhealthy') {
+        torsoSvg = `
+          <!-- Heavy Tech Parka -->
+          <path d="M38 76 L82 76 L86 114 L34 114 Z" fill="${cfg.topFill}" />
+          <line x1="60" y1="76" x2="60" y2="114" stroke="#0F172A" stroke-width="2.5" />
+          <rect x="43" y="92" width="11" height="10" rx="2" fill="#0F172A" opacity="0.35" />
+          <rect x="66" y="92" width="11" height="10" rx="2" fill="#0F172A" opacity="0.35" />
+        `;
+      } else {
+        torsoSvg = `
+          <!-- Hazardous Suit Coat -->
+          <path d="M37 76 L83 76 L87 114 L33 114 Z" fill="${cfg.topFill}" />
+          <rect x="38" y="94" width="44" height="5" fill="#1E293B" />
+          <line x1="60" y1="76" x2="60" y2="114" stroke="#1E293B" stroke-width="2.5" />
+        `;
+      }
+
+      // Arms
+      const armsSvg = `
+        <path d="M41 79 L30 98" stroke="${tier === 'good' ? skinColor : cfg.topFill}" stroke-width="6.5" stroke-linecap="round" />
+        <path d="M79 79 L90 98" stroke="${tier === 'good' ? skinColor : cfg.topFill}" stroke-width="6.5" stroke-linecap="round" />
+      `;
+
+      // Front Hair
+      const frontHair = isGirl
+        ? `<!-- Cute Bangs & Pigtail Clips -->
+           <path d="M37 48 C37 30, 83 30, 83 48 C76 41, 66 43, 60 47 C54 43, 44 41, 37 48 Z" fill="${hairColor}" />
+           <circle cx="38" cy="43" r="4" fill="#F43F5E" />
+           <circle cx="82" cy="43" r="4" fill="#F43F5E" />`
+        : `<!-- Cute Spiky Boy Hair -->
+           <path d="M37 48 C36 28, 84 28, 83 48 C78 39, 71 42, 65 38 C59 43, 52 38, 46 43 C42 40, 39 43, 37 48 Z" fill="${hairColor}" />`;
+
+      // Sun Hat / Sunglasses when Good Air + High UV
+      const sunGearSvg = cfg.sunGear
+        ? `<!-- Cute Sunglasses -->
+           <rect x="43" y="48" width="14" height="9" rx="3" fill="#0F172A" stroke="#FBBF24" stroke-width="1.5" />
+           <rect x="63" y="48" width="14" height="9" rx="3" fill="#0F172A" stroke="#FBBF24" stroke-width="1.5" />
+           <line x1="57" y1="51" x2="63" y2="51" stroke="#FBBF24" stroke-width="1.5" />`
+        : '';
+
+      // Protective Goggles for Unhealthy/Hazardous
+      const gogglesSvg = cfg.goggles
+        ? `<rect x="41" y="46" width="38" height="12" rx="5" fill="rgba(56, 189, 248, 0.28)" stroke="#38BDF8" stroke-width="1.8" />
+           <line x1="60" y1="46" x2="60" y2="58" stroke="#38BDF8" stroke-width="1.2" />`
+        : '';
+
+      // Masks (None / Cloth / N95 / Dual-Filter Respirator)
+      let maskSvg = '';
+      if (cfg.maskType === 'cloth') {
+        maskSvg = `
+          <path d="M44 57 Q60 61 76 57 L73 70 Q60 74 47 70 Z" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.2" />
+          <line x1="44" y1="58" x2="38" y2="55" stroke="#E2E8F0" stroke-width="1.2" />
+          <line x1="76" y1="58" x2="82" y2="55" stroke="#E2E8F0" stroke-width="1.2" />
+        `;
+      } else if (cfg.maskType === 'n95') {
+        maskSvg = `
+          <path d="M43 56 Q60 53 77 56 L74 71 Q60 76 46 71 Z" fill="#F8FAFC" stroke="#38BDF8" stroke-width="1.5" />
+          <line x1="60" y1="55" x2="60" y2="73" stroke="#94A3B8" stroke-width="1" />
+          <circle cx="66" cy="64" r="2.5" fill="#38BDF8" />
+        `;
+      } else if (cfg.maskType === 'respirator') {
+        maskSvg = `
+          <path d="M43 56 Q60 53 77 56 L74 72 Q60 76 46 72 Z" fill="#1E293B" stroke="#EAB308" stroke-width="1.5" />
+          <circle cx="48" cy="66" r="5" fill="#334155" stroke="#EAB308" stroke-width="1.5" />
+          <circle cx="72" cy="66" r="5" fill="#334155" stroke="#EAB308" stroke-width="1.5" />
+        `;
+      }
+
+      // Mouth expression when unmasked
+      let mouthSvg = '';
+      if (cfg.mouth === 'smile') {
+        mouthSvg = `<path d="M54 62 Q60 68 66 62" stroke="#E11D48" stroke-width="2.2" fill="none" stroke-linecap="round" />`;
+      } else if (cfg.mouth === 'calm') {
+        mouthSvg = `<path d="M55 63 Q60 66 65 63" stroke="#9F1239" stroke-width="2" fill="none" stroke-linecap="round" />`;
+      }
+
+      return `
+        <svg viewBox="0 0 120 120" class="w-24 h-24 overflow-visible buddy-float">
+          <circle cx="60" cy="64" r="46" fill="${cfg.bgGlow}" opacity="0.14" />
+          ${particlesSvg}
+          ${outerHood}
+          ${backHair}
+          <g class="buddy-breathe">
+            ${armsSvg}
+            ${torsoSvg}
+            <!-- Neck -->
+            <rect x="55" y="68" width="10" height="10" rx="3" fill="${skinColor}" />
+            <!-- Head -->
+            <circle cx="60" cy="52" r="21" fill="${skinColor}" />
+            <!-- Cute Cheeks -->
+            <ellipse cx="46" cy="57" rx="3.5" ry="2" fill="${blushColor}" opacity="0.65" />
+            <ellipse cx="74" cy="57" rx="3.5" ry="2" fill="${blushColor}" opacity="0.65" />
+            <!-- Eyes -->
+            <g class="buddy-eyes">
+              <circle cx="51" cy="52" r="2.7" fill="#0F172A" />
+              <circle cx="69" cy="52" r="2.7" fill="#0F172A" />
+              <circle cx="52" cy="51" r="0.9" fill="#FFFFFF" />
+              <circle cx="70" cy="51" r="0.9" fill="#FFFFFF" />
+            </g>
+            ${mouthSvg}
+            ${frontHair}
+            ${sunGearSvg}
+            ${gogglesSvg}
+            ${maskSvg}
+          </g>
+        </svg>
+      `;
+    }
+
+    function renderAirBuddy() {
+      const tier = getEffectiveBuddyTier();
+      const uv = Number(state.currentAir?.uv_index ?? 0);
+      const isHighUv = uv >= 6;
+      const stageEl = document.getElementById('buddyStageContainer');
+      if (!stageEl) return;
+
+      if (state.buddyChar === 'both') {
+        stageEl.innerHTML = `
+          <div class="flex items-center -space-x-3">
+            ${buildCharacterSvg('mina', tier, isHighUv)}
+            ${buildCharacterSvg('leo', tier, isHighUv)}
+          </div>
+        `;
+      } else {
+        stageEl.innerHTML = buildCharacterSvg(state.buddyChar, tier, isHighUv);
+      }
+
+      // Update Outfit Badge & Gear Tag
+      const outfitBadge = document.getElementById('buddyOutfitBadge');
+      const gearTag = document.getElementById('buddyGearTag');
+      const previewIndicator = document.getElementById('previewModeIndicator');
+
+      const badgeMeta = {
+        good: {
+          text: isHighUv ? t('outfitGoodUv') : t('outfitGood'),
+          gear: isHighUv ? t('gearGoodUv') : t('gearGood'),
+          color: '#10B981',
+          bg: 'rgba(16,185,129,0.2)'
+        },
+        moderate: {
+          text: t('outfitMod'),
+          gear: t('gearMod'),
+          color: '#F59E0B',
+          bg: 'rgba(245,158,11,0.2)'
+        },
+        sensitive: {
+          text: t('outfitSens'),
+          gear: t('gearSens'),
+          color: '#F97316',
+          bg: 'rgba(249,115,22,0.2)'
+        },
+        unhealthy: {
+          text: t('outfitUnh'),
+          gear: t('gearUnh'),
+          color: '#EF4444',
+          bg: 'rgba(239,68,68,0.2)'
+        },
+        hazardous: {
+          text: t('outfitHaz'),
+          gear: t('gearHaz'),
+          color: '#A855F7',
+          bg: 'rgba(168,85,247,0.2)'
+        }
+      }[tier];
+
+      if (outfitBadge && badgeMeta) {
+        outfitBadge.textContent = badgeMeta.text;
+        outfitBadge.style.backgroundColor = badgeMeta.bg;
+        outfitBadge.style.color = badgeMeta.color;
+        outfitBadge.style.borderColor = `${badgeMeta.color}55`;
+      }
+      if (gearTag && badgeMeta) {
+        gearTag.textContent = badgeMeta.gear;
+      }
+
+      if (previewIndicator) {
+        if (state.simulatedTier === 'live') {
+          previewIndicator.textContent = `● ${t('tierLive')}`;
+          previewIndicator.className = 'text-[10px] font-semibold text-emerald-400';
+        } else {
+          previewIndicator.textContent = `★ ${t(`tier${tier.charAt(0).toUpperCase() + tier.slice(1).slice(0, 3)}` === 'tierSen' ? 'tierSens' : `tier${tier.charAt(0).toUpperCase() + tier.slice(1, 4)}`)}`;
+          previewIndicator.className = 'text-[10px] font-semibold text-amber-300';
+        }
+      }
+
+      // Speech Bubble Quote (Localized)
+      const quotesPack = t('quotes');
+      const tierQuotes = (quotesPack && quotesPack[tier]) || TRANSLATIONS.en.quotes[tier];
+      const chosenQuote = tierQuotes[state.quoteIndex % tierQuotes.length];
+      const charPrefix = state.buddyChar === 'mina' ? t('buddyMina') : state.buddyChar === 'leo' ? t('buddyLeo') : `${t('buddyMina')} & ${t('buddyLeo')}`;
+      const speechEl = document.getElementById('buddySpeechText');
+      if (speechEl) {
+        speechEl.innerHTML = `<strong class="text-sky-300">${charPrefix}:</strong> ${chosenQuote}`;
+      }
+    }
+
+    // =========================================================================
+    // 5. DEVICE GPS GEOLOCATION & REVERSE GEOCODING
+    // =========================================================================
+    function detectDeviceGPS(userInitiated = false) {
+      const pulseEl = document.getElementById('gpsRadarPulse');
+      if (pulseEl) pulseEl.classList.remove('hidden');
+
+      if (!('geolocation' in navigator)) {
+        if (pulseEl) pulseEl.classList.add('hidden');
+        fetchCurrentLocationData();
+        return;
+      }
+
+      document.getElementById('locationTitle').textContent = t('locatingViaGps');
+      document.getElementById('locationSubtitle').textContent = t('acquiringCoords');
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          state.lat = Number(pos.coords.latitude.toFixed(4));
+          state.lon = Number(pos.coords.longitude.toFixed(4));
+          state.isGps = true;
+
+          await reverseGeocodeCoords(state.lat, state.lon);
+          await fetchCurrentLocationData();
+          if (pulseEl) pulseEl.classList.add('hidden');
+          if (userInitiated) showToast(`${t('liveGpsPrefix')}: ${state.locationName}`);
+        },
+        async () => {
+          if (pulseEl) pulseEl.classList.add('hidden');
+          state.isGps = false;
+          if (!state.currentAir) {
+            state.locationName = 'Sydney CBD';
+            state.locationRegion = 'New South Wales, Australia';
+            await fetchCurrentLocationData();
+          } else {
+            updateLocationHeader();
+          }
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      );
+    }
+// ... existing code ... -->
+    function updateLocationHeader() {
+      document.getElementById('locationTitle').textContent = state.locationName;
+      document.getElementById('locationSubtitle').textContent = state.isGps
+        ? `${t('liveGpsPrefix')} · ${state.locationRegion}`
+        : state.locationRegion;
+    }
+
+    // =========================================================================
+    // 6. LIVE OPEN-METEO AIR QUALITY & WEATHER FETCHING
+    // =========================================================================
+    async function fetchCurrentLocationData() {
+      updateLocationHeader();
+      const offlineBanner = document.getElementById('offlineNotice');
+
+      try {
+        const airUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${state.lat}&longitude=${state.lon}&current=us_aqi,european_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,uv_index,dust&hourly=us_aqi,pm2_5,pm10,ozone&forecast_days=2&timezone=auto`;
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${state.lat}&longitude=${state.lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`;
+
+        const [airRes, weatherRes] = await Promise.all([fetch(airUrl), fetch(weatherUrl)]);
+        if (!airRes.ok || !weatherRes.ok) throw new Error('API fetch failed');
+
+        const airData = await airRes.json();
+        const weatherData = await weatherRes.json();
+
+        state.currentAir = airData.current;
+        state.hourly = airData.hourly;
+        state.currentWeather = weatherData.current;
+
+        offlineBanner.classList.add('hidden');
+        offlineBanner.classList.remove('flex');
+
+        renderAllViews();
+      } catch (err) {
+        offlineBanner.classList.remove('hidden');
+        offlineBanner.classList.add('flex');
+        loadOfflineFallbackData();
+        renderAllViews();
+      }
+    }
+// ... existing code ... -->
+    // =========================================================================
+    // 7. UI RENDERING (GAUGE, AIR BUDDY, HEALTH CARDS, POLLUTANTS, 24H CHART)
+    // =========================================================================
+    function renderAllViews() {
+      if (!state.currentAir || !state.currentWeather) return;
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('lastUpdatedText').textContent = t('updatedAt', { time: nowStr });
+
+      renderLiveHeroAndHealth();
+      renderAirBuddy();
+      renderPollutantsView();
+      render24HourTrend();
+      lucide.createIcons();
+    }
+
+    function toggleAqiStandard() {
+      state.standard = state.standard === 'us_aqi' ? 'european_aqi' : 'us_aqi';
+      const label = state.standard === 'us_aqi' ? 'US AQI' : 'EU AQI';
+      document.getElementById('standardToggleBtn').textContent = label;
+      document.getElementById('aqiStandardLabel').textContent = label;
+      renderLiveHeroAndHealth();
+      showToast(label);
+    }
+
+    function renderLiveHeroAndHealth() {
+      const air = state.currentAir;
+      const weather = state.currentWeather;
+      const aqiVal = Math.round(air[state.standard] ?? air.us_aqi ?? 0);
+      const maxGauge = state.standard === 'us_aqi' ? 300 : 120;
+      const cat = getAqiCategory(aqiVal, state.standard);
+
+      // Update Gauge Arc (Total length = 352)
+      const ratio = Math.min(Math.max(aqiVal / maxGauge, 0.04), 1);
+      const offset = 352 - 352 * ratio;
+      const arc = document.getElementById('aqiGaugeArc');
+      arc.style.strokeDashoffset = offset;
+      arc.style.stroke = cat.color;
+
+      // Update Ambient Glow
+      document.getElementById('ambientGlow').style.background = `radial-gradient(circle, ${cat.color} 0%, transparent 70%)`;
+
+      // Update Hero Numbers & Pill
+      document.getElementById('aqiHeroValue').textContent = aqiVal;
+      const statusPill = document.getElementById('aqiStatusPill');
+      statusPill.textContent = cat.label;
+      statusPill.style.backgroundColor = cat.pillBg;
+      statusPill.style.color = cat.color;
+      statusPill.style.borderColor = `${cat.color}55`;
+
+      document.getElementById('aqiSummarySentence').textContent = cat.summary;
+
+      // Dominant pollutant detection
+      const ratios = POLLUTANT_META.map(p => ({
+        formula: p.formula,
+        ratio: (air[p.key] || 0) / p.whoLimit
+      })).sort((a, b) => b.ratio - a.ratio);
+      document.getElementById('dominantPollutantBadge').textContent = `${t('primaryPrefix')}: ${ratios[0].formula}`;
+// ... existing code ... -->
+    function renderPollutantsView() {
+      const air = state.currentAir;
+      const localizedPol = t('pollutants') || {};
+      document.getElementById('pollutantsFullGrid').innerHTML = POLLUTANT_META.map(p => {
+        const rawVal = Number(air[p.key] ?? 0);
+        const valStr = rawVal >= 100 ? Math.round(rawVal) : rawVal.toFixed(1);
+        const whoRatio = rawVal / p.whoLimit;
+        const barPct = Math.min(Math.max(Math.round((rawVal / p.maxScale) * 100), 5), 100);
+        const statusText = whoRatio <= 0.75 ? t('optimal') : whoRatio <= 1.0 ? t('nearWho') : t('aboveWho');
+        const statusColor = whoRatio <= 0.75 ? 'text-emerald-400' : whoRatio <= 1.0 ? 'text-amber-400' : 'text-rose-400';
+        const barColor = whoRatio <= 0.75 ? '#10B981' : whoRatio <= 1.0 ? '#F59E0B' : '#EF4444';
+        const displayName = localizedPol[p.key]?.name || p.name;
+
+        return `
+          <button onclick="openPollutantModal('${p.key}')" class="glass-card rounded-2xl p-4 text-left hover:border-white/20 transition w-full">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center font-display font-extrabold text-sm text-sky-300">
+                  ${p.formula}
+                </div>
+                <div>
+                  <div class="font-display font-bold text-sm text-white">${displayName}</div>
+                  <div class="text-[11px] font-semibold ${statusColor}">${statusText} · ${t('whoLimitShort')} ${p.whoLimit} ${p.unit}</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="font-display font-extrabold text-lg text-white">${valStr}</div>
+                <div class="text-[10px] text-slate-400">${p.unit}</div>
+              </div>
+            </div>
+            <div class="w-full h-2 rounded-full bg-white/10 mt-3 overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-700" style="width: ${barPct}%; background-color: ${barColor};"></div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+// ... existing code ... -->
+      // Find cleanest hour in next 24h
+      let minIdx = 0;
+      sliceAqi.forEach((v, idx) => {
+        if (v !== null && v < sliceAqi[minIdx]) minIdx = idx;
+      });
+      const bestHourStr = sliceTimes[minIdx]?.slice(11, 16) || '06:00';
+      const bestAqiVal = Math.round(sliceAqi[minIdx] || 0);
+      document.getElementById('bestWindowText').textContent = t('bestWindowFmt', { time: bestHourStr, aqi: bestAqiVal });
+
+      // Build clean responsive SVG Bar Chart
+      const maxVal = Math.max(...sliceValues.map(v => Number(v) || 0), 10);
+      const chartW = 360;
+      const chartH = 165;
+      const padBottom = 24;
+      const usableH = chartH - padBottom;
+      const barStep = chartW / sliceValues.length;
+      const barWidth = Math.max(barStep * 0.62, 6);
+
+      const barsSvg = sliceValues.map((val, i) => {
+        const num = Number(val) || 0;
+        const h = Math.max((num / maxVal) * usableH, 6);
+        const x = i * barStep + (barStep - barWidth) / 2;
+        const y = usableH - h;
+        const aqiForColor = Number(sliceAqi[i]) || 30;
+        const cat = getAqiCategory(aqiForColor, 'us_aqi');
+        const hourLabel = sliceTimes[i]?.slice(11, 13) || '';
+        const showLabel = i % 4 === 0;
+
+        return `
+          <g>
+            <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${h.toFixed(1)}" rx="4" fill="${cat.color}" opacity="0.88" />
+            ${showLabel ? `<text x="${(x + barWidth / 2).toFixed(1)}" y="${chartH - 5}" text-anchor="middle" fill="#94A3B8" font-size="10" font-family="Inter">${hourLabel}:00</text>` : ''}
+          </g>
+        `;
+      }).join('');
+
+      document.getElementById('hourlyChartContainer').innerHTML = `
+        <svg viewBox="0 0 ${chartW} ${chartH}" class="w-full h-full overflow-visible">
+          ${barsSvg}
+        </svg>
+      `;
+
+      // Hourly list below chart
+      const unit = state.trendMetric === 'us_aqi' ? 'AQI' : 'µg/m³';
+      document.getElementById('hourlyListContainer').innerHTML = sliceTimes.map((tStr, i) => {
+        const val = Number(sliceValues[i] || 0);
+        const displayVal = state.trendMetric === 'pm2_5' ? val.toFixed(1) : Math.round(val);
+        const cat = getAqiCategory(Number(sliceAqi[i] || 30), 'us_aqi');
+        return `
+          <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5 text-xs">
+            <span class="font-semibold text-slate-300">${i === 0 ? t('now') : tStr.slice(11, 16)}</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold" style="background:${cat.pillBg}; color:${cat.color};">${cat.label}</span>
+            <span class="font-display font-bold text-white">${displayVal} <span class="text-[10px] font-normal text-slate-400">${unit}</span></span>
+          </div>
+        `;
+      }).join('');
+    }
+// ... existing code ... -->
+    function openLocationModal() {
+      document.getElementById('locationModal').classList.remove('hidden');
+      document.getElementById('citySearchInput').value = '';
+      renderCityList(PRESET_LOCATIONS, t('popularCities'));
+      lucide.createIcons();
+    }
+
+    function closeLocationModal() {
+      document.getElementById('locationModal').classList.add('hidden');
+    }
+// ... existing code ... -->
+    let searchDebounce = null;
+    function handleCitySearch(query) {
+      clearTimeout(searchDebounce);
+      const q = query.trim();
+      if (q.length < 2) {
+        renderCityList(PRESET_LOCATIONS, t('popularCities'));
+        return;
+      }
+      searchDebounce = setTimeout(async () => {
+        try {
+          const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=${state.lang}&format=json`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const mapped = (data.results || []).map(r => ({
+            name: r.name,
+            region: [r.admin1, r.country].filter(Boolean).join(', '),
+            lat: r.latitude,
+            lon: r.longitude
+          }));
+          if (mapped.length) {
+            renderCityList(mapped, t('globalResults'));
+          } else {
+            document.getElementById('cityListContainer').innerHTML = `<div class="text-xs text-slate-400 text-center py-6">${t('noCities')}</div>`;
+          }
+        } catch (e) {
+          // Ignore network errors while typing
+        }
+      }, 300);
+    }
+
+    async function selectPresetCity(name, region, lat, lon) {
+      state.name = name;
+      state.locationName = name;
+      state.locationRegion = region;
+      state.lat = lat;
+      state.lon = lon;
+      state.isGps = false;
+      closeLocationModal();
+      await fetchCurrentLocationData();
+      showToast(`${name}`);
+    }
+
+    function openPollutantModal(key) {
+      const meta = POLLUTANT_META.find(p => p.key === key);
+      if (!meta || !state.currentAir) return;
+      const localizedPol = (t('pollutants') || {})[key] || meta;
+      const val = Number(state.currentAir[key] ?? 0);
+      const valStr = val >= 100 ? Math.round(val) : val.toFixed(1);
+
+      document.getElementById('modalPolFormula').textContent = meta.formula;
+      document.getElementById('modalPolName').textContent = localizedPol.name || meta.name;
+      document.getElementById('modalPolValue').textContent = `${valStr} ${meta.unit}`;
+      document.getElementById('modalPolLimit').textContent = `${meta.whoLimit} ${meta.unit}`;
+      document.getElementById('modalPolDesc').textContent = localizedPol.desc || meta.desc;
+      document.getElementById('modalPolHealth').textContent = localizedPol.health || meta.health;
+
+      document.getElementById('pollutantDetailModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+// ... existing code ... -->
+    // =========================================================================
+    // 9. INITIALIZE ON LOAD
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      initPwaCapabilities();
+      applyStaticTranslations();
+      renderAirBuddy();
+      lucide.createIcons();
+      detectDeviceGPS(false);
+    });
+  </script>
+</body>
+</html>
